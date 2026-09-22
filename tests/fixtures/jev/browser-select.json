@@ -1,0 +1,20 @@
+{
+  "request": {
+    "note": "synthetic test double; not a recorded API response"
+  },
+  "response": {
+    "answers": {
+      "target": {
+        "type": "choice",
+        "choice": "e3",
+        "probabilities": {
+          "e1": 0.05,
+          "e2": 0.05,
+          "e3": 0.88,
+          "none": 0.02
+        },
+        "confidence": 0.86
+      }
+    }
+  }
+}

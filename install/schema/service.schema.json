@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://portwright.local/schema/service.schema.json",
+  "title": "portwright service note frontmatter",
+  "description": "Contract for the YAML frontmatter of a services/<id>.md verified-procedure note. Reference/contract doc; bin/portwright lint enforces this with the Python stdlib (no jsonschema dependency at runtime).",
+  "type": "object",
+  "required": [
+    "id",
+    "display_name",
+    "version_tag",
+    "last_verified",
+    "endpoint",
+    "human_steps",
+    "agent_can",
+    "status"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Lowercase service id, e.g. vercel."
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable name, e.g. Vercel."
+    },
+    "version_tag": {
+      "type": "string",
+      "description": "Service/MCP version this procedure was verified against."
+    },
+    "last_verified": {
+      "type": "string",
+      "format": "date",
+      "description": "YYYY-MM-DD the procedure was last confirmed fresh."
+    },
+    "endpoint": {
+      "type": "object",
+      "description": "The connection transport this service is reached over (MCP server, HTTP API, OAuth app, or local CLI).",
+      "required": [
+        "type",
+        "server"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "api",
+            "cli",
+            "mcp",
+            "oauth"
+          ]
+        },
+        "server": {
+          "type": "string",
+          "description": "MCP server name or URL."
+        }
+      }
+    },
+    "human_steps": {
+      "type": "array",
+      "description": "Only the unavoidable human-only steps, reflecting the current tool UI.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "agent_can": {
+      "type": "array",
+      "description": "What the agent does on its own once connected.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "stale"
+      ]
+    },
+    "freshness_evidence": {
+      "type": "object",
+      "required": ["url"],
+      "description": "Explicit public official documentation URL refreshed by update. Downloads provide evidence, not automatic Procedure approval.",
+      "properties": {
+        "url": {
+          "type": "string"
+        }
+      }
+    },
+    "profile_ids": {
+      "type": "array",
+      "description": "Profiles this Procedure is bound to (empty = any).",
+      "items": {
+        "type": "string"
+      }
+    },
+    "distributable": {
+      "type": "boolean",
+      "description": "true = safe to ship via git; false = personal note kept under services/_private/."
+    }
+  }
+}

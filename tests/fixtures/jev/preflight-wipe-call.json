@@ -1,0 +1,20 @@
+{
+  "request": {
+    "note": "synthetic test double; not a recorded API response"
+  },
+  "response": {
+    "answers": {
+      "risk": {
+        "type": "score",
+        "score": 1.9,
+        "legend": {},
+        "probabilities": {
+          "0": 0.0,
+          "1": 0.1,
+          "2": 0.9
+        },
+        "confidence": 0.85
+      }
+    }
+  }
+}

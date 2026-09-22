@@ -1,0 +1,7 @@
+interface:
+  display_name: "Portwright Tool Use"
+  short_description: "Check procedures before tool use"
+  default_prompt: "Use $portwright-tool-use before connecting or troubleshooting an external tool."
+
+policy:
+  allow_implicit_invocation: true

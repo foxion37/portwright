@@ -1,0 +1,22 @@
+{
+  "request": {
+    "note": "synthetic test double; not a recorded API response"
+  },
+  "response": {
+    "answers": {
+      "profile": {
+        "type": "choice",
+        "choice": "gamma",
+        "probabilities": {
+          "gamma": 0.52,
+          "delta": 0.48
+        },
+        "confidence": 0.3
+      },
+      "contradicts": {
+        "type": "noul",
+        "noul": 0.91
+      }
+    }
+  }
+}

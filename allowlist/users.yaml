@@ -1,0 +1,20 @@
+# ⚠️ FUTURE 범위 — v1엔 강제 주체(게이트웨이)가 없어 이 허용목록은 아직 강제되지 않는다.
+#    멀티유저 거버넌스를 되살릴 때 쓴다. 배경: FUTURE.md Layer B.
+#
+# 허용목록 — 누가 어떤 서비스를 쓸 수 있나
+# v1(개인용): 사용자는 나 하나뿐. 원칙: "최소 연결" — 실제로 쓰는 것만 연다.
+
+version: "2.0-v1"
+last_updated: "2026-05-31"
+
+# v1: 단일 사용자. max_tier=confirm → AUTO와 CONFIRM까지만 (FORBIDDEN은 불가).
+users:
+  - id: "me"
+    services: [vercel]      # 실제로 쓰는 것만. 늘릴 때 한 줄씩 추가 (MAINTENANCE.md)
+    max_tier: confirm
+
+# --- 아래는 FUTURE.md(사내 단계)에서 부활시킬 멀티유저 역할 구조 ---
+# roles:
+#   beginner:  { services: [vercel, notion], max_tier: confirm }
+#   operator:  { services: [vercel, notion, gdrive], max_tier: confirm }
+#   admin:     { services: ["*"], max_tier: confirm }

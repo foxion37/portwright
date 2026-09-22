@@ -1,0 +1,7 @@
+interface:
+  display_name: "Portwright Tool Memory"
+  short_description: "Draft safe tool-use memories"
+  default_prompt: "Use $portwright-tool-memory to draft a redacted Portwright memory after solving an external-tool failure."
+
+policy:
+  allow_implicit_invocation: true

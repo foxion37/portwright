@@ -1,0 +1,32 @@
+{
+  "description": "Task class to cognitive-spend routing. Tiers and efforts are the neutral modelchk scale (fast|standard|frontier, glance|measured|thorough|exhaustive). No vendor or model names here: the harness binds tiers to whatever models the user runs. Closed questions go to the decision model (TypeSafe Jev) or to plain code before any language model.",
+  "decision_model": {
+    "id": "jev",
+    "use_for": "closed questions only: choose one option, score on a rubric, yes/no. One request per preflight with every question attached.",
+    "never_for": "writing text, summarizing, planning, code"
+  },
+  "harness_hint": {
+    "omp": {"fast": "smol", "standard": "default", "frontier": "slow", "review": "advisor"}
+  },
+  "classes": [
+    {"class": "route-profile",     "decision": "code-then-jev", "tier": null,       "effort": null,        "note": "path prefix first; jev Choice only when 0 or 2+ candidates"},
+    {"class": "tier-risk",         "decision": "code-then-jev", "tier": null,       "effort": null,        "note": "explicit rules first; jev Score; unmatched or unknown -> confirm"},
+    {"class": "freshness",         "decision": "code-then-jev", "tier": null,       "effort": null,        "note": "version compare first; jev Noul only strengthens a stale rationale"},
+    {"class": "browser-menu",      "decision": "code-then-jev", "tier": null,       "effort": null,        "note": "exact name first; jev Choice with confidence and margin gates"},
+    {"class": "note-triage",       "decision": "jev",           "tier": null,       "effort": null,        "note": "duplicate lesson? secret present? before any draft is written"},
+    {"class": "mechanical-edit",   "decision": "none",          "tier": "fast",     "effort": "glance",    "note": "renames, frontmatter fields, file moves with complete verification"},
+    {"class": "read-only-scout",   "decision": "none",          "tier": "fast",     "effort": "measured",  "note": "codebase or docs investigation, no writes"},
+    {"class": "procedure-derive",  "decision": "none",          "tier": "standard", "effort": "thorough",  "note": "rewrite one Procedure from one fetched official document; input is that pair only"},
+    {"class": "lesson-draft",      "decision": "none",          "tier": "standard", "effort": "measured",  "note": "after note-triage says new and secret-free"},
+    {"class": "implementation",    "decision": "none",          "tier": "standard", "effort": "measured",  "note": "raise to frontier when crossing ownership or touching secrets"},
+    {"class": "architecture",      "decision": "none",          "tier": "frontier", "effort": "thorough",  "note": "design, decomposition, contracts between slices"},
+    {"class": "independent-review","decision": "none",          "tier": "frontier", "effort": "thorough",  "note": "must run on a different model than the one that produced the artifact"},
+    {"class": "release-review",    "decision": "none",          "tier": "frontier", "effort": "exhaustive","note": "security, secrets, data loss, publication"}
+  ],
+  "rules": [
+    "Escalate one tier only when verification cannot prove the cheaper result.",
+    "Review by a model different from the author; same model reviewing itself does not count.",
+    "Language models receive the selected note and evidence only, never the whole cache.",
+    "A decision-model answer below its confidence threshold falls to the safe side, never to auto."
+  ]
+}

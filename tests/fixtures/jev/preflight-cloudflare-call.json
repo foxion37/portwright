@@ -1,0 +1,18 @@
+{
+  "request": {
+    "note": "synthetic test double; not a recorded API response"
+  },
+  "response": {
+    "answers": {
+      "profile": {
+        "type": "choice",
+        "choice": "beta",
+        "probabilities": {
+          "alpha": 0.08,
+          "beta": 0.92
+        },
+        "confidence": 0.9
+      }
+    }
+  }
+}

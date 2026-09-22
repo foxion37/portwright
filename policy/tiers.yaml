@@ -1,0 +1,38 @@
+# ⚠️ FUTURE 범위 — v1엔 강제 주체(게이트웨이)가 없다. 이 파일은 아직 아무것도 강제하지 않는다.
+#    게이트웨이 레이어를 되살릴 때 쓴다. 배경: FUTURE.md Layer A, docs/adr/0002·0003.
+#    주의(ADR-0003): 후보 엔진은 allow/block만 지원 → CONFIRM 단계는 그대로는 불가, 재작업 필요.
+#
+# 자율성 3단계 규칙 (사람이 읽는 원본)
+# 에이전트가 행동마다 사람에게 묻지 않게, 미리 경계를 정해둔다.
+
+version: "1.1"
+last_updated: "2026-05-31"
+
+# 기본값(default tier): 아래 어느 패턴에도 안 맞는 호출은 이 단계로 처리한다.
+# deny-by-default(fail-closed) — 이름이 표준을 안 따르는 위험 도구(예: remove_project)가
+# 조용히 AUTO로 통과하는 걸 막는다. (CONTEXT.md: Tier)
+default: confirm
+
+# AUTO: 묻지 않고 바로 실행한다. (되돌릴 수 있는 안전한 작업)
+auto:
+  - "read_*"          # 조회/읽기
+  - "list_*"          # 목록 보기
+  - "search_*"        # 검색
+  - "get_*"           # 단건 조회
+  - "create_branch"   # 임시 브랜치처럼 되돌리기 쉬운 것
+
+# CONFIRM: 실행하기 전에 사람에게 딱 한 번 확인받는다.
+confirm:
+  - "deploy_*"        # 배포
+  - "send_*"          # 메시지/이메일 발송
+  - "delete_*"        # 삭제
+  - "*payment*"       # 결제 관련
+  - "update_env*"     # 환경변수 변경
+
+# FORBIDDEN: 절대 하지 않는다. (사고가 나는 조합을 원천 차단)
+# 참고: 신뢰 못 할 입력 + 권한 있는 데이터 + 외부 행동, 이 셋이 겹치면 위험("치명적 삼위일체")
+forbidden:
+  - "export_secrets"        # 비밀키를 밖으로 빼내기
+  - "*bulk_personal_data*"  # 개인정보 대량 추출 (규제 대응)
+  - "grant_admin*"          # 권한 상향
+  - "disable_audit*"        # 감사 로그 끄기

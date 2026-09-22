@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://portwright.local/schema/profile.schema.json",
+  "title": "portwright profile note frontmatter",
+  "description": "Contract for profiles/<id>.md: one project's account, env source, database, and default tier bundle. Values are references only; never secrets.",
+  "type": "object",
+  "required": [
+    "id",
+    "project_path",
+    "github_account",
+    "env_source",
+    "default_tier",
+    "host"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "project_path": {
+      "type": "string",
+      "description": "Absolute project root; longest prefix match on cwd wins."
+    },
+    "github_account": {
+      "type": "string",
+      "description": "GitHub login or org used for this project."
+    },
+    "env_source": {
+      "type": "object",
+      "required": [
+        "kind",
+        "injector"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "infisical",
+            "1password",
+            "dotenv",
+            "none"
+          ]
+        },
+        "project": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "string"
+        },
+        "injector": {
+          "type": "string",
+          "description": "Command that injects values at runtime, e.g. opsvc or infisical run."
+        }
+      }
+    },
+    "databases": {
+      "type": "array",
+      "description": "kind:name references, e.g. d1:ccc, postgres:example.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "services": {
+      "type": "array",
+      "description": "Service ids commonly used under this profile.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "default_tier": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "confirm",
+        "forbid"
+      ]
+    },
+    "host": {
+      "type": "string",
+      "enum": [
+        "macbook",
+        "mini",
+        "any"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "stale"
+      ]
+    }
+  }
+}

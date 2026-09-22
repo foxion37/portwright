@@ -1,0 +1,44 @@
+# 비밀값은 절대 커밋하지 않는다 (이 프로젝트의 존재 이유)
+.env
+.env.*
+*.key
+*.pem
+secrets/
+*.secret
+services/_private/
+failures/_private/
+
+# 게이트웨이/엔진 로컬 설정 (생성물)
+/engine-config/
+*.local.yaml
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 도구 런타임 상태 (내용물 아님)
+.omc/
+.claude/
+.gjc/
+.omo/
+.cockpit/
+_workspace/
+
+# 로그 (감사로그 원본은 별도 보관, 레포엔 가공된 failures/만)
+*.log
+/logs/
+
+# 파이썬 캐시
+__pycache__/
+
+# 슬라이스 워크트리
+.worktrees/
+docs/research/*-validation.json
+
+# 번들 빌드 산출물
+/build/
+
+# 내보내기 산출물 표식
+.portwright-build

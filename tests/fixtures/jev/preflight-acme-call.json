@@ -1,0 +1,24 @@
+{
+  "request": {
+    "note": "synthetic test double; not a recorded API response"
+  },
+  "response": {
+    "answers": {
+      "risk": {
+        "type": "score",
+        "score": 0.1,
+        "legend": {
+          "0": "read-only",
+          "1": "undoable",
+          "2": "irreversible"
+        },
+        "probabilities": {
+          "0": 0.9,
+          "1": 0.1,
+          "2": 0.0
+        },
+        "confidence": 0.88
+      }
+    }
+  }
+}

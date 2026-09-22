@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://portwright.local/schema/failure.schema.json",
+  "title": "portwright failure note frontmatter",
+  "description": "Contract for the YAML frontmatter of a failures/YYYY-MM-DD-<service>-<desc>.md lesson note. Reference/contract doc; bin/portwright lint enforces this with the Python stdlib (no jsonschema dependency at runtime). The note body must also carry a non-empty root-cause section (a heading containing '진짜 원인' or 'root cause').",
+  "type": "object",
+  "required": [
+    "date",
+    "service",
+    "service_version",
+    "status"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "YYYY-MM-DD the failure occurred."
+    },
+    "service": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Service id this lesson belongs to, e.g. vercel."
+    },
+    "service_version": {
+      "type": "string",
+      "description": "Service/MCP version at the time — distrust the lesson if the version moved."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "stale"
+      ]
+    },
+    "profile_id": {
+      "type": "string",
+      "description": "Profile the failure happened under (optional)."
+    },
+    "distributable": {
+      "type": "boolean",
+      "description": "true = safe to ship via git; false = personal Lesson kept under failures/_private/."
+    }
+  }
+}

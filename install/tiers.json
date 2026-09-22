@@ -1,0 +1,47 @@
+{
+  "description": "Advisory tier rules. First matching forbid wins; then the highest-priority matched rule; unmatched falls to the Profile default_tier or confirm. Clients enforce.",
+  "rules": [
+    {
+      "service": "*",
+      "intent": "instruct",
+      "tier": "confirm",
+      "reason": "human-facing instruction must be checked against current docs"
+    },
+    {
+      "service": "*",
+      "intent": "recover",
+      "tier": "confirm",
+      "reason": "recovery paths retry side effects"
+    },
+    {
+      "service": "1password",
+      "intent": "*",
+      "tier": "forbid",
+      "reason": "secret store: never automated without the opsvc procedure"
+    },
+    {
+      "service": "infisical",
+      "intent": "*",
+      "tier": "forbid",
+      "reason": "secret store: values must never reach agent output"
+    },
+    {
+      "service": "github",
+      "intent": "call",
+      "tier": "confirm",
+      "reason": "service-level call intent does not distinguish reads from deletion, publishing, or permission changes"
+    },
+    {
+      "service": "vercel",
+      "intent": "call",
+      "tier": "confirm",
+      "reason": "deploys are user-visible"
+    },
+    {
+      "service": "cloudflare",
+      "intent": "call",
+      "tier": "confirm",
+      "reason": "D1 and Workers changes hit production"
+    }
+  ]
+}
