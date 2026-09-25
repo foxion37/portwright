@@ -196,8 +196,11 @@ def _root_cause(body: list[str]) -> str | None:
 
 
 class ContractCatalog:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, *, hub: str | None = None, include_trial: bool | None = None):
         self.root = root.resolve()
+        self.hub = hub
+        self.include_trial = include_trial
+        self._hub_notes: dict[str, str] = {}
         self._schemas = {
             "service": self._load_schema("service"),
             "failure": self._load_schema("failure"),
@@ -248,11 +251,33 @@ class ContractCatalog:
         location = note_location(raw)
         if location is None or (location[1] == "draft" and not include_drafts):
             raise ValueError("path must be a relative catalog .md note")
+        if location[1] == "hub":
+            if self._legacy_hub():
+                if Path(raw).parts[2] in ("public", "company"):
+                    raise ValueError("Hub note is not in the active generation")
+            else:
+                from .hub_sync import snapshot
+                _, active = snapshot(self.root, self.hub, include_trial=self._trial())
+                if raw not in {relative for _, relative in active}:
+                    raise ValueError("Hub note is not in the active generation")
         path = self.root / raw
         self._safe_components(path)
         if not path.is_file():
             raise ValueError("note not found")
         return path
+
+    def _legacy_hub(self) -> bool:
+        """Unconfigured M1 homes keep local notes; configured Hubs require a pointer."""
+        local = self.root / "_local/hub"
+        return self.hub is None and all(not p.exists() and not p.is_symlink()
+                                        for p in (local / "config.json", local / "state.json"))
+
+    def _trial(self) -> bool:
+        if self.include_trial is not None:
+            return self.include_trial
+        from .hub_sync import config
+        _, settings = config(self.root, self.hub)
+        return bool(settings and settings.get("include_trial", False))
 
     def _roots(self, include_drafts: bool) -> Iterable[tuple[str, str, Path]]:
         for directory, kind in NOTE_KINDS.items():
@@ -271,12 +296,22 @@ class ContractCatalog:
                                           issues=[Issue("directory", str(error))]))
         return results
 
-    def iter_notes(self, *, include_drafts: bool = True) -> list[Path]:
+    def iter_notes(self, *, include_drafts: bool = True, include_trial: bool | None = None) -> list[Path]:
         paths: list[Path] = []
+        self._hub_notes = {}
+        active_hub = None
         for kind, source, directory in self._roots(include_drafts):
             try:
                 self.source_root(kind, source)
             except ValueError:
+                continue
+            if source == "hub" and not self._legacy_hub():
+                if active_hub is None:
+                    from .hub_sync import snapshot
+                    _, active_hub = snapshot(self.root, self.hub, include_trial=self._trial() if include_trial is None else include_trial)
+                    self._hub_notes = {relative: note["text"] for note, relative in active_hub}
+                paths.extend(self.root / relative for note, relative in active_hub if
+                             (kind == "service") == (note["kind"] == "procedure"))
                 continue
             if not directory.is_dir():
                 continue
@@ -284,6 +319,8 @@ class ContractCatalog:
                 dirs[:] = sorted(name for name in dirs
                                  if source not in {"tracked", "profile"}
                                  and not name.startswith("_") and not (Path(parent) / name).is_symlink())
+                if source == "hub" and Path(parent) == directory:
+                    dirs[:] = [name for name in dirs if name not in ("public", "company")]
                 for name in files:
                     path = Path(parent) / name
                     if note_location(path.relative_to(self.root)):
@@ -301,7 +338,10 @@ class ContractCatalog:
             for note in group:
                 by_source.setdefault(note.source, []).append(note)
             for source, duplicates in by_source.items():
-                if len(duplicates) > 1:
+                siblings = (source == "hub" and len(duplicates) == 2
+                            and {note.data.get("grade") for note in duplicates} == {"stable", "trial"}
+                            and len({note.data.get("revision") for note in duplicates}) == 2)
+                if len(duplicates) > 1 and not siblings:
                     for note in duplicates:
                         note.issues.append(Issue("duplicate_id", f"{note.note_id} occurs more than once in {source}"))
         return groups
@@ -320,7 +360,9 @@ class ContractCatalog:
                 results.append(self.validate_note(path))
         groups = self._identities(results)
         priority = {"private": 0, "tracked": 1, "hub": 2, "profile": 0}
-        return [min(group, key=lambda note: (priority[note.source], note.relative_path))
+        return [min(group, key=lambda note: (priority[note.source],
+                                              0 if note.source == "hub" and note.data.get("grade") == ("trial" if self._trial() else "stable") else 1,
+                                              note.relative_path))
                 for _, group in sorted(groups.items())]
 
     def lookup(self, kind: str, note_id: str, *, sources: tuple[str, ...] | None = None) -> NoteResult | None:
@@ -336,27 +378,34 @@ class ContractCatalog:
         lexical_path = path.absolute()
         kind = self._kind(lexical_path)
         relative = lexical_path.relative_to(self.root).as_posix()
-        if not lexical_path.parent.resolve().is_relative_to(self.root):
-            return NoteResult(
-                path=lexical_path,
-                relative_path=relative,
-                kind=kind,
-                issues=[Issue("file", "note parent resolves outside the Portwright root")],
-            )
-        if lexical_path.is_symlink():
-            return NoteResult(
-                path=lexical_path,
-                relative_path=relative,
-                kind=kind,
-                issues=[Issue("file", "symlink notes are not allowed")],
-            )
-        path = lexical_path.resolve()
+        if note_location(relative) and note_location(relative)[1] == "hub" and not self._legacy_hub():
+            if relative not in self._hub_notes:
+                from .hub_sync import snapshot
+                _, active = snapshot(self.root, self.hub, include_trial=self._trial())
+                self._hub_notes = {candidate: note["text"] for note, candidate in active}
+            if relative not in self._hub_notes:
+                return NoteResult(path=lexical_path, relative_path=relative, kind=kind,
+                                  issues=[Issue("file", "Hub note is not in the active generation")])
+            path = lexical_path
+            text = self._hub_notes[relative]
+        else:
+            if not lexical_path.parent.resolve().is_relative_to(self.root):
+                return NoteResult(
+                    path=lexical_path, relative_path=relative, kind=kind,
+                    issues=[Issue("file", "note parent resolves outside the Portwright root")],
+                )
+            if lexical_path.is_symlink():
+                return NoteResult(
+                    path=lexical_path, relative_path=relative, kind=kind,
+                    issues=[Issue("file", "symlink notes are not allowed")],
+                )
+            path = lexical_path.resolve()
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as error:
+                return NoteResult(path=path, relative_path=relative, kind=kind,
+                                  issues=[Issue("file", f"cannot read UTF-8 text ({error})")])
         result = NoteResult(path=path, relative_path=relative, kind=kind)
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as error:
-            result.issues.append(Issue("file", f"cannot read UTF-8 text ({error})"))
-            return result
 
         frontmatter, body = split_frontmatter(text)
         result.body = body
@@ -483,7 +532,7 @@ class ContractCatalog:
 
     def validate_workspace(self, *, strict: bool = False, include_drafts: bool = True) -> ValidationReport:
         results = [self.validate_note(path, strict=strict)
-                   for path in self.iter_notes(include_drafts=include_drafts)]
+                   for path in self.iter_notes(include_drafts=include_drafts, include_trial=True)]
         groups = self._identities(results)
         warnings = []
         for (kind, note_id), group in sorted(groups.items()):

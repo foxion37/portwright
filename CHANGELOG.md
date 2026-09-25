@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-25
+### Added
+- Public Hub Worker: scoped MCP lesson intake, D1 token lineage and budgets, immutable R2 releases, recall-aware reads, and operator administration.
+- Commons publisher: one workflow with evidence gates, review receipts, safe git commits, bundle publication, and resumable acknowledgments.
+- `portwright hub sync`: verified public/company generations with offline recall enforcement, private overrides, explicit trial opt-in, and local MCP submission screening.
+- `scripts/verify_hub.py` and fixed synthetic corpora for M2 Hub acceptance. Completion literals require deployed HTTP and independent D1/commons git/tail/R2/model evidence as applicable; missing credentials or incomplete channels block them. `--setup`/`--teardown` can use a run-ID recovery manifest containing only identifiers and token hashes, never credential values.
+- When Hub verification lacks credentials, it re-executes once through the approved headless 1Password runner with an owner-only reference file. Injection errors remain `BLOCKED` without printing runner output or values.
+
+### Fixed
+- M2 acceptance consumes H2/H3/H4 digest-bound `/sync`, real local sync, default/opt-in preflight and MCP `get_note`, and recalled-generation rejection. Pinned directory recall now preserves the pre-recall sibling set at the same canonical parent and pin; NOT_FOUND is allowed only for an observed empty remainder.
+- Secrets verification sends every corpus sample through all string leaves of submit, confirm and report, plus RPC IDs, unknown keys/values, JSON escapes, malformed JSON, invalid UTF-8 and separate complete oversized frames. Every request has a non-secret URL marker; the verifier waits for completed invocation receipts and controls, joins both tail readers and scans the final snapshot. Missing receipts, partial frames, sampling and reconnect notices block success.
+- D1 scans project the intake/events TEXT columns for all token hashes created since the verification window began, paging in memory with explicit row-count and page-completeness checks. Other users' text is never written to artifacts or logs; SQL argv contains no corpus samples. Wrangler file logging and metrics remain disabled. R2 establishes an in-memory baseline from complete listings and every original object body (including an initially empty bucket), retaining ETags and SHA-256 digests. The ending sweep reads every body again, scans new/changed objects, and checks unchanged ETags against baseline digests. Refused HTTP bodies are checked in memory for sample echoes.
+- R2 absence checks also inspect decoded JSON string keys/values, so escaped samples cannot hide in inventories; a disappearing baseline object blocks verification instead of being treated as clean.
+- Teardown verifies rejection and text erasure for pending/held intake, token revocation, recalled revision absence, and removal of the budget override. Review uses a fresh detached checkout under `/tmp`, without switching the supplied commons checkout.
+- Idempotency now observes two distinct queued/running dispatch IDs while the same intake or promotion review remains pending, then waits for those exact runs and verifies one intake/frontmatter receipt, commit trailer and review ack/promotion. Cancelled, collapsed, already-finished or otherwise unproven overlaps block acceptance. Synthetic subprocess tests separate HTTP 204 from completion, record the pending-work intersection, and serialize mutations like the workflow concurrency group. Local H2 rejection/directory and real H4 consumer checks remain synthetic evidence, not deployed acceptance.
+
+### Limitations
+- Live acceptance requires approved short-lived credentials and scoped independent read access, verified model pricing, and the operator's approved headless injection command. H4 is integrated; a CLI help response alone is not preflight proof. No deployment or live acceptance was performed here.
+- Tail completeness is scoped to marked requests' completed invocation events and the captured window, not provider-internal logs. A platform that cannot deliver every unsampled receipt is BLOCKED; an end marker or quiet period alone never proves completion.
+- R2 verification covers two complete observed inventories and their bodies: O(total retained bytes), plus paginated listings. Samples fail verification; unreadable/oversized objects, incomplete pagination, a changing sweep or an unchanged ETag with a mismatched body digest block it. Objects created and deleted between sweeps remain unobserved, so this is not a global or continuous absence claim. Independent continuous mutation history is not required by §9.3-4; the unconditional history-related block was removed. `SECRETS OK` remains reachable only after all required observation channels and teardown succeed.
+- The budget fake Worker tests the verifier's response handling and cleanup, not H2's conditional INSERT or deployed D1 atomicity. Those require H2's own runtime tests and a separately authorized deployed budget race.
+- Lifecycle and recall reissue **consume the supplied `HUB_TEST_SUBMIT_A_TOKEN` permanently**. Use a fresh disposable A token for each run; teardown revokes the replacement and cannot restore the original.
+- Budget verification refuses a pre-existing override instead of overwriting operator state. Workflow evidence assumes an exclusive verification window with no unrelated manual dispatches. Company isolation requires a public comparison Hub; a personal comparison does not establish the M3 boundary.
+- Injection success requires the actual `injection_suspected` gate outcome and model ledger evidence, not any held/rejected state. Changed official documents or earlier evidence-gate refusals stop the literal. H3 exports no gate-reason constant set; corpus expectations are checked against its current wire reasons. Off-domain fetch absence is supported by the H3 local gate tests, not observable from an empty remote model ledger alone.
+- Commit/upload interruption and resume remain H3 tempfile-git test evidence, not part of the live idempotency literal. Model digest/byte receipts and local transport tests are not a recording of provider request bodies or a guarantee about platform-internal logs.
+
+
 ## [2.1.0] - 2026-09-25
 
 ### Added
@@ -113,3 +140,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.2.0]: https://github.com/foxion37/portwright/releases/tag/v1.2.0
 [2.0.0]: https://github.com/foxion37/portwright/releases/tag/v2.0.0
 [2.1.0]: ../../releases/tag/v2.1.0
+[2.2.0]: ../../releases/tag/v2.2.0

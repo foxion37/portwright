@@ -44,7 +44,7 @@ class OutsideUserTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, f"{args}: {combined}")
                 return result.stdout
 
-            run(sys.executable, str(exporter), "--out", str(exported))
+            run(sys.executable, str(exporter), "--code-only", "--out", str(exported))
             run("git", "init", "-q", str(exported))
             run("git", "add", "-A", cwd=exported)
             run("git", "-c", "user.name=Outside User", "-c", "user.email=outside@example.invalid",

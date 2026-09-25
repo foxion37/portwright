@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "text": {"type":"string","minLength":1,"maxLength":2048},
+    "service": {"type":"string","pattern":"^[a-z0-9]+(?:-[a-z0-9]+)*$","maxLength":64},
+    "uuid": {"type":"string","pattern":"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "revision": {"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+    "note_id": {"type":"string","pattern":"^(service|failure)/[a-z0-9]+(?:-[a-z0-9]+)*$","maxLength":160},
+    "evidence": {
+      "type":"object","additionalProperties":false,
+      "required":["action","outcome"],
+      "properties":{"action":{"$ref":"#/$defs/text"},"outcome":{"$ref":"#/$defs/text"}}
+    },
+    "submit_lesson": {
+      "type":"object","additionalProperties":false,
+      "required":["request_id","service_id","kind","body","doc_url","success_evidence"],
+      "dependentRequired":{"note_id":["expected_revision"],"expected_revision":["note_id"]},
+      "properties":{
+        "request_id":{"$ref":"#/$defs/uuid"},
+        "service_id":{"$ref":"#/$defs/service"},
+        "kind":{"type":"string","enum":["procedure","lesson"]},
+        "body":{"$ref":"#/$defs/text"},
+        "doc_url":{"type":"string","format":"uri","pattern":"^https://","minLength":1,"maxLength":2048},
+        "success_evidence":{"$ref":"#/$defs/evidence"},
+        "note_id":{"$ref":"#/$defs/note_id"},
+        "expected_revision":{"$ref":"#/$defs/revision"}
+      }
+    },
+    "confirm_lesson": {
+      "type":"object","additionalProperties":false,
+      "required":["note_id","revision","success_evidence"],
+      "properties":{
+        "note_id":{"$ref":"#/$defs/note_id"},
+        "revision":{"$ref":"#/$defs/revision"},
+        "success_evidence":{"$ref":"#/$defs/evidence"}
+      }
+    },
+    "report_failure": {
+      "type":"object","additionalProperties":false,
+      "required":["note_id","revision","reason"],
+      "properties":{
+        "note_id":{"$ref":"#/$defs/note_id"},
+        "revision":{"$ref":"#/$defs/revision"},
+        "reason":{"$ref":"#/$defs/text"}
+      }
+    }
+  }
+}

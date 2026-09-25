@@ -1,0 +1,16 @@
+{
+  "name": "<worker-name>",
+  "main": "<absolute-path-to-hub/src/index.ts>",
+  "compatibility_date": "2026-09-03",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "HUB_AUDIENCE": "<personal-or-public-or-company>",
+    "HUB_ORG": "<non-identifying-org>",
+    "HUB_INTAKE_ENABLED": "<true-or-false>",
+    "HUB_MONTHLY_CAP_MICROUSD": "<integer-up-to-10000000>"
+  },
+  "d1_databases": [{ "binding": "HUB_DB", "database_name": "<database-name>", "database_id": "<database-id>" }],
+  "r2_buckets": [{ "binding": "SKILLS_BUCKET", "bucket_name": "<bucket-name>" }],
+  "observability": { "enabled": false }
+}

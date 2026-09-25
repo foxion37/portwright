@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
-"""Publish built skill bundles to a gisul Worker as an immutable release (G3/P4).
+"""Publish built skill bundles to a Portwright Hub as an immutable release.
 
-Follows gisul's publication contract (docs/deployment.md in changeroa/gisul): build inventory
-schema v1 and release.json, upload inventory.json first, then every object, then POST
-/admin/verify and /admin/promote with the current pointer's ETag and a monotonic sequence.
+Follows the Hub publication contract: build the release inventory (v1 for the personal
+audience, v2 with note-index coverage for public/company), upload inventory.json first,
+then every object, then POST /admin/verify and /admin/promote with the current
+pointer's ETag and the next sequence.
 
 The builder's inventory.json is the manifest: every file in the output directory must be
 listed there with matching sha256 and size, and every listed file must exist. Unlisted or
 tampered files refuse the release. Files outside a skill root (release.json,
-watch-sources.json) ship digest-bound without a resource URI.
+note-index.json) ship digest-bound without a resource URI.
 
-Environment: GISUL_PUBLISH_ORIGIN (https://<worker> only, no credentials, path, query, or
-fragment), GISUL_PUBLISH_TOKEN (bearer, never printed), optional GISUL_RELEASE_SEQUENCE
-(defaults to GITHUB_RUN_NUMBER), optional GISUL_SOURCE (URI source id, default
-"portwright"), optional GISUL_YAML_MODULE (directory whose node_modules provides the
-`yaml` package; defaults to the sibling gisul checkout), GISUL_DRY_RUN=1 to only write
-the inventory locally. Redirects are never followed, error bodies are never echoed,
-mutations are never retried automatically, and an uncertain promote response is
-resolved by re-reading /admin/current before reporting.
+Environment: HUB_ORIGIN (https://<worker> only, no credentials, path, query, or
+fragment), HUB_WORKFLOW_TOKEN (bearer, never printed), HUB_AUDIENCE
+(personal|public|company; also accepted as --audience), optional HUB_YAML_MODULE
+(directory whose node_modules provides the `yaml` package; otherwise the installed
+code hub/ tree is used), --dry-run to only write the release inventory locally.
+Redirects are never followed, error bodies are never echoed, mutations are never
+retried automatically, and an uncertain promote response is resolved by re-reading
+/admin/current before reporting.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -34,18 +36,21 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = os.environ.get("GISUL_SOURCE", "portwright")
+sys.path.insert(0, str(ROOT / "lib"))
+
+from portwright import hub_contracts  # noqa: E402
+from portwright.doc_cache import NoRedirect  # noqa: E402
+
+AUDIENCE_SOURCE = {"personal": "portwright", "public": "commons", "company": "commons"}
+SHARED_AUDIENCES = ("public", "company")
+GRADES = ("stable", "trial")
 LOCAL_FILES = {"inventory.json", "inventory.gisul.json", ".portwright-build"}
 COMMIT_RE = re.compile(r"[a-f0-9]{40}")
 SEGMENT_RE = re.compile(r"[A-Za-z0-9._~-]+")
+DIGEST_RE = re.compile(r"sha256:[a-f0-9]{64}")
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None  # refuse every redirect; it surfaces as an HTTPError with the 3xx code
-
-
-urlopen = urllib.request.build_opener(_NoRedirect()).open  # module-level for fake transports in tests
+urlopen = urllib.request.build_opener(NoRedirect()).open  # module-level for fake transports in tests
 
 
 
@@ -57,7 +62,7 @@ _NODE_YAML_MISSING = False
 
 
 def _node_yaml(block: str) -> dict | None:
-    """Parse frontmatter with the same YAML semantics the gisul Worker uses (the `yaml`
+    """Parse frontmatter with the same YAML semantics the Hub Worker uses (the `yaml`
     npm package), via node or bun. Returns None when no parser is installed; invalid
     YAML is a hard failure. Build-time only: the Portwright runtime stays stdlib."""
     global _NODE_YAML, _NODE_YAML_MISSING
@@ -71,7 +76,7 @@ def _node_yaml(block: str) -> dict | None:
     pairs = [_NODE_YAML] if _NODE_YAML else [
         (runtime, str(Path(base) / "noop.js"))
         for runtime in (shutil.which("node"), shutil.which("bun")) if runtime
-        for base in (os.environ.get("GISUL_YAML_MODULE"), str(ROOT.parent / "gisul" / "worker"), str(ROOT.parent / "gisul")) if base
+        for base in (os.environ.get("HUB_YAML_MODULE"), str(ROOT / "hub")) if base
     ]
     for runtime, anchor in pairs:
         try:
@@ -101,7 +106,7 @@ def _yaml_scalar(value: str, lineno: int) -> object:
             return value[1:-1].replace("''", "'")
         raise SystemExit(f"SKILL.md frontmatter line {lineno}: bad single-quoted scalar")
     if value[:1] in "|>&*!%@`[{" or value == "-" or value.startswith("- "):
-        raise SystemExit(f"SKILL.md frontmatter line {lineno}: unsupported YAML metadata; install node with the gisul worker yaml package or set GISUL_YAML_MODULE")
+        raise SystemExit(f"SKILL.md frontmatter line {lineno}: unsupported YAML metadata; install the `yaml` package under HUB_YAML_MODULE")
     low = value.lower()
     if low in ("null", "~"):
         return None
@@ -134,7 +139,7 @@ def _subset_yaml(block: str) -> dict:
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         if raw != raw.lstrip():
-            raise SystemExit(f"SKILL.md frontmatter line {lineno}: nested or folded metadata needs the gisul YAML parser (node + yaml)")
+            raise SystemExit(f"SKILL.md frontmatter line {lineno}: nested or folded metadata needs the YAML parser (node + yaml under HUB_YAML_MODULE)")
         key, sep, value = raw.partition(":")
         key = key.strip()
         if not sep or not re.fullmatch(r"[A-Za-z0-9_-]+", key):
@@ -143,7 +148,7 @@ def _subset_yaml(block: str) -> dict:
         if value and value[:1] not in "\"'":
             value = re.split(r"\s+#", value)[0].strip()
         if not value:
-            raise SystemExit(f"SKILL.md frontmatter line {lineno}: empty or block value needs the gisul YAML parser (node + yaml)")
+            raise SystemExit(f"SKILL.md frontmatter line {lineno}: empty or block value needs the YAML parser (node + yaml under HUB_YAML_MODULE)")
         data[key] = _yaml_scalar(value, lineno)
     return data
 
@@ -199,7 +204,66 @@ def load_manifest(out: Path) -> dict:
         expected = {path: (entry["sha256"], entry["size"]) for path, entry in flat.items() if path.startswith(root_prefix)}
         if len(actual) != len(resources) or actual != expected:
             raise SystemExit(f"builder inventory skill {name} resource set differs from its package")
+    if manifest.get("schema_version") == 2:
+        validate_v2_manifest(manifest)
     return manifest
+
+
+def validate_v2_manifest(manifest: dict) -> None:
+    """Shared-manifest requirements: audience, per-skill grade/note_refs, note_index.
+    Commons packages carry no origin; only a code package is marked origin: code."""
+    audience = manifest.get("audience")
+    if audience not in SHARED_AUDIENCES:
+        raise SystemExit("builder inventory audience is not public or company")
+    index = manifest.get("note_index")
+    if not isinstance(index, dict) or index.get("path") != "note-index.json" or not DIGEST_RE.fullmatch(str(index.get("digest", ""))) or not isinstance(index.get("size"), int):
+        raise SystemExit("builder inventory lacks a valid note_index entry")
+    for name, skill in manifest["skills"].items():
+        if str(skill["path"]).startswith("personal/"):
+            raise SystemExit(f"builder inventory has a personal package in a shared bundle: {name}")
+        if skill.get("origin") == "code":
+            if skill.get("grade") or skill.get("note_refs"):
+                raise SystemExit(f"code package carries a grade or note_refs: {name}")
+            continue
+        if "origin" in skill:
+            raise SystemExit(f"builder inventory has an unknown package origin: {name}")
+        if skill.get("grade") not in GRADES or not str(skill["path"]).startswith(f"{skill['grade']}/"):
+            raise SystemExit(f"builder inventory skill grade does not match its path: {name}")
+        refs = skill.get("note_refs")
+        if not isinstance(refs, list) or not refs:
+            raise SystemExit(f"builder inventory skill lacks note_refs: {name}")
+        for ref in refs:
+            if not isinstance(ref, dict) or not isinstance(ref.get("note_id"), str) or not DIGEST_RE.fullmatch(str(ref.get("revision", ""))):
+                raise SystemExit(f"builder inventory skill has a malformed note_ref: {name}")
+
+
+def validate_v2_notes(out: Path, manifest: dict) -> None:
+    """note-index.json must match its manifest entry and cover exactly the bundle's files
+    and every skill's note_refs."""
+    entry = manifest["note_index"]
+    path = out / entry["path"]
+    if path.is_symlink() or not path.is_file():
+        raise SystemExit("shared bundle lacks note-index.json")
+    data = path.read_bytes()
+    if len(data) != entry["size"] or sha(data) != entry["digest"]:
+        raise SystemExit("note-index.json differs from the builder inventory")
+    try:
+        payload = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise SystemExit("note-index.json is not valid JSON") from None
+    source = AUDIENCE_SOURCE[manifest["audience"]]
+    coverage = {
+        "audience": manifest["audience"],
+        "files": [{"path": item["path"], "digest": "sha256:" + item["sha256"], "size": item["size"]} for item in manifest["files"]],
+        "skills": [
+            {"uri": f"skill://gisul/{source}/{skill['path'][: -len('SKILL.md')]}SKILL.md",
+             "grade": skill.get("grade"), "note_refs": skill.get("note_refs", [])}
+            for skill in manifest["skills"].values()
+        ],
+    }
+    verdict = hub_contracts.validate_note_index(payload, inventory=coverage)
+    if not verdict["ok"]:
+        raise SystemExit("note-index does not cover the bundle: " + ", ".join(verdict["errors"]))
 
 
 def validated_inventory(out: Path) -> dict:
@@ -209,6 +273,8 @@ def validated_inventory(out: Path) -> dict:
     dict. Raises SystemExit on any mismatch. No network, no environment required."""
     manifest = load_manifest(out)
     verify_output(out, manifest)
+    if manifest.get("schema_version") == 2:
+        validate_v2_notes(out, manifest)
     return manifest
 
 
@@ -237,27 +303,43 @@ def verify_output(out: Path, manifest: dict) -> dict[str, bytes]:
     return objects
 
 
-def build_inventory(manifest: dict, objects: dict[str, bytes], commit: str) -> tuple[dict, dict[str, bytes]]:
+def build_inventory(manifest: dict, objects: dict[str, bytes], commit: str, *, audience: str, source: str) -> tuple[dict, dict[str, bytes]]:
+    if audience not in AUDIENCE_SOURCE:
+        raise SystemExit(f"unknown audience: {audience}")
+    if audience == "personal":
+        if manifest.get("schema_version") == 2:
+            raise SystemExit("the personal audience publishes only the v1 inventory")
+    elif manifest.get("schema_version") != 2 or manifest.get("audience") != audience:
+        raise SystemExit("the public and company audiences require a v2 builder inventory for that audience")
     skills: list[dict] = []
     files: list[dict] = []
+    by_path = {entry["path"]: entry for entry in manifest["skills"].values()}
     roots = sorted({entry["path"][: -len("SKILL.md")] for entry in manifest["skills"].values()})
     for root in roots:
         name = root.rstrip("/").rsplit("/", 1)[-1]
+        builder_skill = by_path[f"{root}SKILL.md"]
         resources = []
         for relative in sorted(path for path in objects if path.startswith(root)):
             data = objects[relative]
-            uri = f"skill://gisul/{SOURCE}/{relative}"
+            uri = f"skill://gisul/{source}/{relative}"
             entry = {"uri": uri, "digest": sha(data), "size": len(data)}
             resources.append(entry)
             files.append({"path": relative, "digest": entry["digest"], "size": entry["size"], "uri": uri})
-        skill_uri = f"skill://gisul/{SOURCE}/{root}SKILL.md"
+        skill_uri = f"skill://gisul/{source}/{root}SKILL.md"
         if skill_uri not in {r["uri"] for r in resources}:
             raise SystemExit(f"{root}: missing SKILL.md")
         text = objects[f"{root}SKILL.md"].decode("utf-8")
         meta = frontmatter(text)
         if meta["name"] != name:
             raise SystemExit(f"{root}: frontmatter name differs from directory")
-        skills.append({"uri": skill_uri, "frontmatter": meta, "resources": resources})
+        skill = {"uri": skill_uri, "frontmatter": meta, "resources": resources}
+        if audience != "personal":
+            if builder_skill.get("origin") == "code":
+                skill["origin"] = "code"
+            if builder_skill.get("grade"):
+                skill["grade"] = builder_skill["grade"]
+            skill["note_refs"] = builder_skill.get("note_refs", [])
+        skills.append(skill)
     for relative in sorted(path for path in objects if "/" not in path):
         data = objects[relative]
         files.append({"path": relative, "digest": sha(data), "size": len(data)})
@@ -276,7 +358,22 @@ def build_inventory(manifest: dict, objects: dict[str, bytes], commit: str) -> t
     release_bytes = json.dumps({"commit": commit, "release": release, "skills": manifest_digests}, separators=(",", ":")).encode("utf-8")
     objects["release.json"] = release_bytes
     files.append({"path": "release.json", "digest": sha(release_bytes), "size": len(release_bytes)})
-    inventory = {"schema_version": 1, "commit": commit, "release": release, "skills": skills, "files": files, "aliases": {}}
+    if audience == "personal":
+        return {"schema_version": 1, "commit": commit, "release": release, "skills": skills, "files": files, "aliases": {}}, objects
+    index = objects["note-index.json"]
+    inventory = {
+        "schema_version": 2, "commit": commit, "release": release, "audience": audience,
+        "skills": skills, "files": files,
+        "note_index": {"path": "note-index.json", "digest": sha(index), "size": len(index)},
+        "aliases": {},
+    }
+    try:
+        payload = json.loads(index.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise SystemExit("note-index.json is not valid JSON") from None
+    verdict = hub_contracts.validate_note_index(payload, inventory=inventory)
+    if not verdict["ok"]:
+        raise SystemExit("release note-index does not match the inventory: " + ", ".join(verdict["errors"]))
     return inventory, objects
 
 
@@ -286,9 +383,9 @@ def clean_origin(raw: str) -> str:
         url = urlsplit(raw.strip())
         port = url.port
     except ValueError:
-        raise SystemExit("GISUL_PUBLISH_ORIGIN is not a valid URL")
+        raise SystemExit("HUB_ORIGIN is not a valid URL")
     if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment or url.path not in ("", "/"):
-        raise SystemExit("GISUL_PUBLISH_ORIGIN must be https://host[:port] with no credentials, path, query, or fragment")
+        raise SystemExit("HUB_ORIGIN must be https://host[:port] with no credentials, path, query, or fragment")
     return f"https://{url.hostname}:{port}" if port else f"https://{url.hostname}"
 
 
@@ -322,58 +419,87 @@ def current_identity(origin: str, token: str) -> tuple[int, dict | None]:
     return status, {"etag": etag}
 
 
-def main(argv: list[str]) -> int:
-    out = Path(argv[0] if argv else ROOT / "build" / "skill-bundles").resolve()
-    manifest = load_manifest(out)
+def identity_matches(current: dict, identity: dict) -> bool:
+    """The whole published identity must match, not just the inventory digest."""
+    return isinstance(current, dict) and all(current.get(key) == identity[key] for key in ("commit", "release", "inventory_digest"))
+
+
+def publish(out: Path, origin: str, token: str, audience: str, *, dry_run: bool = False) -> dict:
+    """Upload one built bundle set and promote it, returning the verified identity.
+
+    The caller owns the credentials; no environment is read here. Raises SystemExit on
+    any refusal, so an uncertain result is never reported as success. A rerun whose
+    pointer already carries this exact identity (commit, release, inventory_digest) is
+    reported as promoted from the pointer alone, without uploading or re-promoting."""
+    if audience not in AUDIENCE_SOURCE:
+        raise SystemExit(f"unknown audience: {audience}")
+    out = Path(out).resolve()
+    manifest = validated_inventory(out)
     commit = manifest["commit"]
     objects = verify_output(out, manifest)
-    inventory, objects = build_inventory(manifest, objects, commit)
+    inventory, objects = build_inventory(manifest, objects, commit, audience=audience, source=AUDIENCE_SOURCE[audience])
     inventory_bytes = json.dumps(inventory, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     identity = {"commit": commit, "release": inventory["release"], "inventory_digest": sha(inventory_bytes)}
     (out / "inventory.gisul.json").write_bytes(inventory_bytes)
-    print(json.dumps({"release": identity["release"], "skills": len(inventory["skills"]), "objects": len(objects) + 1}))
-    if os.environ.get("GISUL_DRY_RUN"):
-        return 0
-    token = os.environ.get("GISUL_PUBLISH_TOKEN", "")
-    if not token:
-        print("GISUL_PUBLISH_TOKEN is required", file=sys.stderr)
-        return 1
-    origin = clean_origin(os.environ.get("GISUL_PUBLISH_ORIGIN", ""))
-    sequence = int(os.environ.get("GISUL_RELEASE_SEQUENCE") or os.environ.get("GITHUB_RUN_NUMBER") or 0)
-    if sequence < 1:
-        print("a positive GISUL_RELEASE_SEQUENCE or GITHUB_RUN_NUMBER is required", file=sys.stderr)
-        return 1
-    status, current = current_identity(origin, token)
+    result = {**identity, "audience": audience, "skills": len(inventory["skills"]), "objects": len(objects) + 1,
+              "sequence": None, "promoted": False, "confirmed_via": None}
+    if dry_run:
+        return result
+    target = clean_origin(origin)
+    status, current = current_identity(target, token)
     if status not in (200, 404):
-        print(f"admin/current failed: HTTP {status}", file=sys.stderr)
-        return 1
+        raise SystemExit(f"admin/current failed: HTTP {status}")
+    if status == 200 and identity_matches(current or {}, identity):
+        # A previous run already published exactly these bytes (a promote whose response
+        # was lost, or an ack retry): re-uploading or re-promoting must not happen.
+        return {**result, "sequence": (current or {}).get("sequence"), "promoted": True, "confirmed_via": "admin/current"}
     expected_etag = (current or {}).get("etag") if status == 200 else None
+    sequence = int((current or {}).get("sequence") or 0) + 1
     uploads = [("inventory.json", inventory_bytes)] + sorted(objects.items())
     for relative, data in uploads:
-        status, _, _ = request("PUT", f"{origin}/admin/releases/{commit}/{relative}", token, data, "application/octet-stream")
+        status, _, _ = request("PUT", f"{target}/admin/releases/{commit}/{relative}", token, data, "application/octet-stream")
         if status not in (200, 201):
-            print(f"upload {relative} failed: HTTP {status}", file=sys.stderr)
-            return 1
+            raise SystemExit(f"upload {relative} failed: HTTP {status}")
     body = json.dumps({**identity, "expected_etag": expected_etag, "sequence": sequence}).encode("utf-8")
-    status, _, _ = request("POST", f"{origin}/admin/verify", token, body)
+    status, _, _ = request("POST", f"{target}/admin/verify", token, body)
     if status != 200:
-        print(f"verify failed: HTTP {status}", file=sys.stderr)
+        raise SystemExit(f"verify failed: HTTP {status}")
+    status, _, _ = request("POST", f"{target}/admin/promote", token, body)
+    if status == 200:
+        return {**result, "sequence": sequence, "promoted": True, "confirmed_via": "admin/promote"}
+    # The response is uncertain: the promote may still have landed. Re-read the
+    # pointer and report the true state instead of retrying the mutation.
+    read_status, current = current_identity(target, token)
+    if read_status == 200 and identity_matches(current or {}, identity):
+        return {**result, "sequence": (current or {}).get("sequence"), "promoted": True, "confirmed_via": "admin/current"}
+    raise SystemExit(f"promote failed: HTTP {status}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", default=str(ROOT / "build" / "skill-bundles"))
+    parser.add_argument("--audience", choices=tuple(AUDIENCE_SOURCE), default=None)
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
+    audience = args.audience or os.environ.get("HUB_AUDIENCE", "")
+    if audience not in AUDIENCE_SOURCE:
+        print("--audience or HUB_AUDIENCE must be personal, public or company", file=sys.stderr)
         return 1
-    print("verify: ok")
-    status, _, _ = request("POST", f"{origin}/admin/promote", token, body)
-    if status != 200:
-        # The response is uncertain: the promote may still have landed. Re-read the
-        # pointer and report the true state instead of retrying the mutation.
-        read_status, current = current_identity(origin, token)
-        if read_status == 200 and (current or {}).get("inventory_digest") == identity["inventory_digest"]:
-            print(json.dumps({"promoted": identity, "confirmed_via": "admin/current"}))
-            return 0
-        print(f"promote failed: HTTP {status}; current pointer: {json.dumps(current)}", file=sys.stderr)
+    try:
+        if args.dry_run:
+            result = publish(Path(args.out), "", "", audience, dry_run=True)
+        else:
+            token = os.environ.get("HUB_WORKFLOW_TOKEN", "")
+            if not token:
+                print("HUB_WORKFLOW_TOKEN is required", file=sys.stderr)
+                return 1
+            result = publish(Path(args.out), os.environ.get("HUB_ORIGIN", ""), token, audience)
+    except SystemExit as error:
+        print(str(error) or "publish failed", file=sys.stderr)
         return 1
-    print("promote: ok")
-    print(json.dumps({"promoted": identity}))
+    print(json.dumps(result))
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+    raise SystemExit(main())

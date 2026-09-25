@@ -47,3 +47,5 @@ docs/research/*-validation.json
 
 # 로컬 사용 장부와 개선 리뷰 (기계-로컬, 배포 안 함)
 /_local/
+hub/node_modules/
+hub/.wrangler/

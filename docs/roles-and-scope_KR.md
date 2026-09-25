@@ -18,11 +18,33 @@ portwright는 AI 에이전트가 외부 도구의 현재 절차와 재사용할 
 
 ## 읽고 제출하는 방법
 
-로컬에서는 같은 노트 id를 `_private` → 추적 노트 → `_hub` 순서로 찾습니다. 같은 출처 안에서 id가 중복되면 오류가 나고, 출처가 다르면 우선순위에 따라 덮어쓰면서 경고합니다. `_hub`는 Hub에서 받은 노트를 저장하는, git이 추적하지 않는 로컬 캐시로 계획되어 있습니다. 코드 업데이트와 별개로 동기화합니다. 캐시에 절차가 없으면 Agent가 현재 공식 문서에서 도출해 저장합니다. 전달받은 노트를 읽기 위해 사용자가 비공개 commons 저장소에 접근할 필요는 없습니다.
+로컬에서는 같은 노트 id를 `_private` → 추적 노트 → 선택한 `_hub` 스냅샷 순서로 찾습니다. 같은 출처의 중복 id는 오류, 서로 다른 출처의 중복 id는 경고와 함께 우선순위에 따라 덮어씁니다. Hub 동기화는 코드 업데이트와 별도로 새 세대를 저장하고 상태 포인터 하나로 두 노트 루트를 전환합니다. 선택하지 않은 Hub는 읽지 않고 공개·회사 Hub 사이에 대체 조회도 없습니다. 아직 Hub를 설정하지 않은 M1 로컬 홈은 기존 `_hub` 노트를 읽지만, 공유 Hub를 설정하면 그 미검증 노트는 숨기고 활성 세대만 사용합니다. 캐시에 절차가 없다면 Agent가 현재 공식 문서에서 도출해 저장합니다. 노트를 읽는 사용자에게 비공개 commons 저장소 권한은 필요하지 않습니다.
 
-계획된 공유 Hub에서는 `stable` 노트만 기본 preflight, 번들, MCP 조회에 나옵니다. 게시 검사를 통과한 `trial` 노트는 시험 중인 자료로, 명시적으로 요청해야만 볼 수 있습니다. 자동 게시가 검증 완료를 뜻하지는 않습니다. 서로 다른 초대 토큰 계보 세 건의 확인에 Operator 검토까지 마쳐야 `stable`로 올립니다. 본문 revision이 바뀌면 다시 확인해야 합니다. 서로 다른 두 계보가 신고하면 `trial` revision을 회수하고, `stable` 회수에는 Operator 확인이 필요합니다. 회수는 노트 id와 revision digest를 기준으로 현재 조회, 옛 릴리스 pin, 동기화한 로컬 캐시에 적용합니다. 오프라인 캐시는 다시 연결해 동기화하기 전까지 새 회수 사실을 알 수 없습니다.
+공유 Hub의 `stable` 노트만 기본 preflight·번들·MCP 조회에 나옵니다. `trial`은 시험 자료로, 로컬에서는 `--include-trial` 또는 해당 Hub 설정의 `include_trial: true`를 명시해야 볼 수 있습니다. 서로 다른 초대 토큰 계보 세 건의 확인과 Operator 검토로 `stable`로 승격하며 본문 revision이 바뀌면 재확인합니다. 서로 다른 계보 두 건은 `trial`을 신고해 회수할 수 있고 `stable` 회수에는 Operator 확인도 필요합니다. 회수는 노트 id와 revision에 적용되며 과거 pin과 동기화한 로컬 캐시에도 반영됩니다. 오프라인에는 이미 받은 회수를 계속 적용하지만 아직 받지 않은 새 회수는 재연결 전까지 알 수 없습니다.
 
-제출은 **M2에서 MCP로만 제공할 계획**입니다(`submit_lesson`, `confirm_lesson`, `report_failure`). GitHub Issue/PR의 자유 본문 제출은 지원하지 않습니다. 공개 Hub의 토큰은 Operator가, 회사 Hub의 토큰은 회사 관리자가 발급하며, 직접 가입할 수 없습니다. 초대 토큰은 Hub 인증에만 사용하고 사용자의 외부 도구 자격증명으로 쓰지 않습니다. Hub에는 토큰의 해시, 조직, 권한(`read|submit|operator`), 만료, 비식별 계보 id만 저장하고 이름, 이메일 주소, IP 주소는 저장하지 않습니다.
+제출은 MCP 전용(`submit_lesson`, `confirm_lesson`, `report_failure`)이며 CLI 제출 명령과 GitHub Issue/PR 자유 본문 접수는 없습니다. 선택한 Hub 설정과 토큰 환경변수가 있을 때에만 로컬 MCP가 제출 도구를 노출합니다. 자유 본문을 검사하고 확인·실패 신고에서는 그 Hub의 활성 스냅샷에 노트 id와 revision이 있는지도 요청 전 확인합니다. company에서 명시적으로 읽은 노트를 기본 public Hub로 신고할 수 없습니다. Hub는 영속 저장 전에 다시 검사합니다. 공개 토큰은 Operator, 회사 토큰은 회사 관리자가 발급하며 직접 가입은 없습니다. 토큰은 Hub 인증용이지 외부 도구 자격증명이 아닙니다. Hub에는 토큰 해시, 조직, 권한(`read|submit|operator`), 만료, 비식별 계보 id만 저장합니다.
+
+### 로컬 동기화와 MCP Client
+
+공개 Hub 배포와 초대 토큰의 승인된 런타임 주입 경로가 준비되면 `<content-home>/_local/hub/config.json`에 아래 설정을 로컬로 만듭니다. 이 파일을 공개 배포물에 넣지 않습니다.
+
+```json
+{"schema_version":1,"active":"public","hubs":{"public":{"url":"https://public-hub.example.org","token_env":"PORTWRIGHT_PUBLIC_HUB_TOKEN"}}}
+```
+
+URL은 경로 없는 HTTPS origin입니다. `token_env`에는 환경변수 **이름만** 쓰고 값은 쓰지 않습니다. CLI·로컬 MCP 실행 때만 승인된 경로로 자격을 주입합니다. 회사 사용자는 별도의 `company` 항목을 등록하고 명시적으로 선택하거나 `active`로 지정합니다. personal은 이 명령의 동기화 대상이 아닙니다.
+
+`--hub`를 생략한 카탈로그·preflight·MCP 조회와 제출은 모두 `config.active`를 따릅니다. 설정에 `active`가 없으면 기존 추적·비공개 노트는 계속 읽지만 기본 Hub는 선택하지 않습니다. 명시적으로 동기화해도 기본 조회에서 자동으로 선택하지 않으며, `active` 값이 있는데 잘못되면 오류를 냅니다. 일회성 `hub sync --hub company`는 회사 스냅샷만 갱신하고 기본 public 선택은 바꾸지 않습니다. 기본 선택을 바꾸려면 `active`를 직접 바꿉니다. 캐시 노트가 손상되면 오프라인 조회는 거부하지만, 온라인 동기화는 저장된 회수 표식과 새 Hub 응답을 검증한 뒤 정상 세대로 복구할 수 있습니다. 다음 동기화 잠금 소유자가 해당 Hub에서 소유권이 입증된 비활성·미완성 세대만 정리합니다.
+
+```sh
+<portwright>/bin/portwright hub sync --hub public --home <content-home>
+<portwright>/bin/portwright preflight acme --hub public --home <content-home>
+<portwright>/bin/portwright hub sync --offline --home <content-home>
+```
+
+`hub sync --include-trial`은 그 실행에만 적용됩니다. 해당 Hub 항목에 `\"include_trial\":true`를 넣으면 지속적으로 적용되며, 어느 쪽도 없으면 trial은 저장하거나 표시하지 않습니다. 오프라인 동기화는 네트워크와 토큰 조회 없이 마지막 활성 세대와 이미 받은 회수를 확인합니다. Preflight는 마지막 성공 동기화 시각을 표시할 뿐 현재 온라인 회수를 확인했다는 뜻은 아닙니다. 동기화가 중단되었다면 실행 중인 프로세스가 없음을 확인한 뒤에만 `sync.lock`을 해제합니다.
+
+지원하는 MCP Client에는 자체 MCP 설정으로 로컬 stdio 명령 `<portwright>/bin/portwright mcp --home <content-home>`을 등록하고 `preflight`, `get_note`, `status`를 호출합니다. Hub 설정과 런타임 토큰이 있으면 사전 검사하는 제출 도구 세 개도 나타납니다. Client 설정·명령·URL에 토큰 값을 쓰지 않습니다. 원격 Hub에 직접 연결한 Client는 로컬 검사를 우회할 수 있으므로 원격 Hub의 재검사는 계속 필요합니다.
 
 ## 지키는 경계
 
