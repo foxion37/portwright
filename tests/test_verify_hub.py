@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import base64
 import contextlib
+import datetime
 import hashlib
 import importlib.util
 import io
@@ -1337,7 +1338,13 @@ class VerifyHubTest(unittest.TestCase):
             with self.assertRaisesRegex(self.module.Blocked, "d1-window-incomplete"):
                 runner.secret_rows(["synthetic-leak"])
 
-    def test_directory_not_found_requires_an_empty_pinned_parent(self):
+    def test_secrets_blocks_when_observability_field_is_absent(self):
+        runner = self.module.Hub.__new__(self.module.Hub)
+        runner.deployment = lambda resource="settings": {"logpush": False, "tail_consumers": []}
+        with self.assertRaisesRegex(self.module.Failed, "log-channel-exposed"):
+            runner.scenario_secrets()
+
+    def test_directory_not_found_after_recall_can_hide_the_old_package(self):
         runner = self.module.Hub.__new__(self.module.Hub)
         target = "skill://gisul/commons/trial/github/notes/target.md"
         sibling = target.replace("target.md", "sibling.md")
@@ -1349,9 +1356,9 @@ class VerifyHubTest(unittest.TestCase):
         visible.remove(target)
         runner.check_directory(target, "a" * 40, recalled=True, remaining=remaining)
         runner.rpc = lambda *args: (200, {"error": {"message": "NOT_FOUND"}})
-        with self.assertRaises(self.module.Failed):
-            runner.check_directory(target, "a" * 40, recalled=True, remaining=remaining)
-        runner.check_directory(target, "a" * 40, recalled=True, remaining=set())
+        # §7.3 revokes the entire old package; the normal sibling is checked in
+        # current note-index/HTTP reads, not guaranteed to survive on the old pin.
+        runner.check_directory(target, "a" * 40, recalled=True, remaining=remaining)
         with self.assertRaises(self.module.Blocked):
             runner.check_directory(target, "a" * 40, recalled=True)
 
@@ -1379,7 +1386,7 @@ for await (const line of createInterface({input:process.stdin})) {
         runner.tail_broken = runner.tail_pending = False
         runner.tail = type("Live", (), {"poll": lambda self: None})()
         runner.stop_tail = lambda: None
-        runner.deployment = lambda: {"observability": {"enabled": False}}
+        runner.deployment = lambda resource="settings": {"observability": None} if resource == "script-settings" else {}
         runner.issue_token = lambda: "synthetic"
         runner.token = lambda role: "synthetic-" + role
         runner.count = lambda *args: 0
@@ -1477,13 +1484,34 @@ for await (const line of createInterface({input:process.stdin})) {
             self.assertIsInstance(runner.tail_snapshot, str)
             expected = {event["event"]["request"]["url"] for event in runner.tail_events}
             runner.tail_events.pop(1)
-            with self.assertRaisesRegex(module.Blocked, "tail-window-incomplete"):
+            with self.assertRaisesRegex(module.Blocked, "tail-receipts-missing"):
                 runner.seal_tail(expected, samples, timeout=0.01)
         finally:
             child.stdin.close()
             child.wait(timeout=10)
             child.stdout.close()
             child.stderr.close()
+
+    def test_tail_receipt_uses_header_when_platform_redacts_query(self):
+        runner = self.module.Hub.__new__(self.module.Hub)
+        runner.origin = "https://hub.test"
+        runner.tail_broken = runner.tail_pending = False
+        runner.tail = type("Tail", (), {"poll": lambda self: None})()
+        runner.stop_tail = lambda: None
+        marker = "12345678-1234-1234-1234-123456789abc-2"
+        health = runner.origin + "/healthz?verify=start"
+        target = runner.origin + "/mcp?verify=" + marker
+        runner.tail_events = [
+            {"outcome": "ok", "event": {"request": {"url": health}}},
+            {"outcome": "ok", "event": {"request": {
+                "url": runner.origin + "/mcp?verify=REDACTED",
+                "headers": {"x-portwright-verify": marker}}}},
+        ]
+        runner.seal_tail({health, target}, [])
+        self.assertEqual(len(runner.tail_events), 2)
+        runner.tail_events[1]["event"]["request"]["headers"] = {}
+        with self.assertRaisesRegex(self.module.Blocked, "tail-receipts-missing"):
+            runner.seal_tail({health, target}, [], timeout=0.01)
 
     def test_overlap_requires_two_live_runs_and_pending_work(self):
         module = self.module
@@ -1654,12 +1682,13 @@ for await (const line of createInterface({input:process.stdin})) {
         approved = {"name": "example", "files": [
             {"path": "SKILL.md", "sha256": "a" * 64, "bytes": 123},
             {"path": "notes.md", "sha256": "b" * 64, "bytes": 45}]}
-        entry = {"uri": "skill://gisul/personal/example/SKILL.md",
+        prefix = "skill://gisul/portwright/personal/example/"
+        entry = {"uri": prefix + "SKILL.md",
                  "frontmatter": {"name": "example", "description": "A skill"},
                  "resources": [
-                     {"uri": "skill://gisul/personal/example/SKILL.md",
+                     {"uri": prefix + "SKILL.md",
                       "digest": "sha256:" + "a" * 64, "size": 123},
-                     {"uri": "skill://gisul/personal/example/notes.md",
+                     {"uri": prefix + "notes.md",
                       "digest": "sha256:" + "b" * 64, "size": 45}]}
         self.assertTrue(self.module.approved_personal_entry(entry, approved))
         entry["resources"][1]["digest"] = "sha256:" + "c" * 64
@@ -1750,6 +1779,14 @@ for await (const line of createInterface({input:process.stdin})) {
             [{"success": True, "result": [{"key": "a"}],
               "result_info": {"is_truncated": False}}],
             [{"success": False, "result": [], "result_info": {"is_truncated": False}}],
+            # No paging information on a full page cannot prove the listing ended.
+            [{"success": True, "result": [{"key": f"k{index}", "etag": "e"} for index in range(1000)]}],
+            # A cursor means more objects even when the page is short and the flag is absent.
+            [{"success": True, "result": [{"key": "a", "etag": "e"}],
+              "result_info": {"cursor": "next"}}],
+            [{"success": True, "result": [{"key": "a", "etag": "e"}],
+              "result_info": {"is_truncated": False, "cursor": "next"}}],
+            [{"success": True, "result": [{"key": "a", "etag": "e"}], "result_info": {"is_truncated": "no"}}],
         ]
         for pages in cases:
             with self.subTest(pages=pages):
@@ -1762,6 +1799,15 @@ for await (const line of createInterface({input:process.stdin})) {
                                   lambda request, timeout=30: _Response(next(stream))):
                     with self.assertRaises(self.module.Blocked):
                         runner.r2_listing()
+
+    def test_r2_listing_accepts_short_final_page_without_result_info(self):
+        # The live API omits result_info on a final page; the schema marks it optional.
+        page = {"success": True, "result": [{"key": "recalls/current.json", "etag": "e1"}]}
+        runner = self.module.Hub.__new__(self.module.Hub)
+        with patch.dict(os.environ, {"HUB_VERIFY_BUCKET": "synthetic", "HUB_VERIFY_ACCOUNT_ID": "synthetic",
+                                     "HUB_VERIFY_CLOUDFLARE_TOKEN": "synthetic"}), \
+             patch.object(self.module, "OPEN", lambda request, timeout=30: _Response(page)):
+            self.assertEqual(runner.r2_listing(), {"recalls/current.json": "e1"})
 
     def test_r2_object_rejects_unreadable_or_invalid_bodies(self):
         runner = self.module.Hub.__new__(self.module.Hub)
@@ -1994,6 +2040,34 @@ for await (const line of createInterface({input:process.stdin})) {
             self.assertIsInstance(case["body"], str)
             self.assertTrue(case["doc_url"].startswith("https://"))
             self.assertIsInstance(case["success_evidence"], dict)
+
+    def test_submitted_note_bodies_carry_current_utc_date(self):
+        corpus = json.loads((ROOT / "tests/fixtures/hub/injection-corpus.json").read_text())
+        captured = {}
+
+        class FakeDate:
+            def isoformat(self):
+                return "2031-01-02"
+
+        class FakeNow:
+            def date(self):
+                return FakeDate()
+
+        class FakeDateTime:
+            @staticmethod
+            def now(tz):
+                captured["tz"] = tz
+                return FakeNow()
+
+        runner = self.module.Hub.__new__(self.module.Hub)
+        with patch.object(self.module, "datetime", FakeDateTime):
+            body = runner.note(suffix="\nRecall control.\n")["body"]
+            for case in corpus["cases"]:
+                submitted = self.module.dated(case["body"])
+                with self.subTest(case=case["id"]):
+                    self.assertTrue(submitted.startswith("---\ndate: 2031-01-02\n"), case["id"])
+        self.assertTrue(body.startswith("---\ndate: 2031-01-02\n"))
+        self.assertIs(captured["tz"], datetime.timezone.utc)
 
     def test_injection_early_gate_or_missing_model_evidence_cannot_pass(self):
         for reason, receipts, failure in (

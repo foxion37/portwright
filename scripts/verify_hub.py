@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import codecs
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -43,6 +44,7 @@ EVIDENCE = ("HUB_VERIFY_CLOUDFLARE_TOKEN", "HUB_VERIFY_GITHUB_TOKEN",
             "HUB_VERIFY_ACCOUNT_ID", "HUB_VERIFY_COMMONS")
 POLL_SECONDS = 5
 TAIL_URL = "verify"
+PERSONAL_URI_PREFIX = "skill://gisul/portwright/personal/"
 
 
 class Blocked(Exception):
@@ -78,6 +80,12 @@ def _corpus(name):
     return ROOT / "tests" / "fixtures" / "hub" / name
 
 
+def dated(body):
+    """Set the frontmatter date to the current UTC day; the gate pins date to created."""
+    return re.sub(r"(?m)^date: .*$", "date: " + datetime.now(timezone.utc).date().isoformat(),
+                  body, count=1)
+
+
 def wrangler_env():
     """The only child env wrangler may see; debug logs and telemetry stay off."""
     return {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""),
@@ -107,12 +115,24 @@ def visible_notes(sync):
     return pairs
 
 
-def r2_next_cursor(page, seen):
-    """Official List Objects paging: result[] plus result_info.cursor/is_truncated."""
+def r2_next_cursor(page, seen, per_page=1000):
+    """Official List Objects paging: result[] plus optional result_info.cursor/is_truncated.
+
+    The schema marks result_info and is_truncated optional and the live API omits
+    result_info on a final page, so absence only ends paging when the page is short.
+    """
     info = page.get("result_info") if isinstance(page, dict) else None
-    if not isinstance(info, dict) or not isinstance(info.get("is_truncated"), bool):
+    truncated = info.get("is_truncated") if isinstance(info, dict) else None
+    if truncated is None:
+        result = page.get("result") if isinstance(page, dict) else None
+        if (info is None or (isinstance(info, dict) and not info.get("cursor"))) and isinstance(result, list) and len(result) < per_page:
+            return None
         raise Blocked("r2-pagination-unverifiable")
-    if not info["is_truncated"]:
+    if not isinstance(truncated, bool):
+        raise Blocked("r2-pagination-unverifiable")
+    if not truncated:
+        if info.get("cursor"):
+            raise Blocked("r2-pagination-unverifiable")
         return None
     cursor = info.get("cursor")
     if not isinstance(cursor, str) or not cursor or cursor in seen:
@@ -139,7 +159,7 @@ def check_rejected_response(client, raw, sample, *, path="/mcp"):
 
 
 def approved_personal_entry(entry, approved):
-    prefix = f"skill://gisul/personal/{approved['name']}/"
+    prefix = f"{PERSONAL_URI_PREFIX}{approved['name']}/"
     if (entry.get("uri") != prefix + "SKILL.md"
             or entry.get("frontmatter", {}).get("name") != approved["name"]
             or not isinstance(entry.get("resources"), list)):
@@ -287,6 +307,11 @@ class Hub:
             raise Blocked("https-required")
         headers = {"Authorization": "Bearer " + self.token(role), "Accept": "application/json", "User-Agent": "portwright-hub/2.2"}
         data = raw if raw is not None else None
+        marker = re.fullmatch(r"/mcp\?verify=([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}-[0-9]+)", path)
+        if marker:
+            # Workers tail redacts authenticated query values to REDACTED. A benign
+            # header survives and binds the completed receipt to this invocation.
+            headers["X-Portwright-Verify"] = marker.group(1)
         if data is not None:
             headers["Content-Type"] = "application/json"
         req = urllib.request.Request(url, method=method, headers=headers, data=data)
@@ -411,16 +436,16 @@ class Hub:
 
     def note(self, service="github", *, suffix="", body=None, doc_url=None):
         # These are authored synthetic examples, not captured traffic.
-        body = body or ("---\ndate: 2026-09-25\n"
+        body = body or dated("---\ndate: 2026-09-25\n"
                         f"service: {service}\n"
                         "service_version: 1\nstatus: active\n"
-                        "distributable: true\n---\n## Root cause\nThe read used an outdated path.\n"
-                        "## Fix\nRead the documented resource path before retrying.\n")
+                        "distributable: true\n---\n## Root cause\nThe summary described the repository as only its latest files.\n"
+                        "## Fix\nDescribe a repository as containing all of the code, all files, and each file's revision history.\n")
         return {"request_id": str(uuid.uuid4()), "service_id": service,
                 "kind": "lesson", "body": body + suffix,
-                "doc_url": doc_url or "https://docs.github.com/en/rest/repos/contents",
-                "success_evidence": {"action": "Read the documented public resource path",
-                                     "outcome": "The expected public resource was returned"}}
+                "doc_url": doc_url or "https://docs.github.com/en/repositories",
+                "success_evidence": {"action": "Opened the repositories overview in the official documentation",
+                                     "outcome": "The overview stated that a repository contains all of your code, your files, and each file's revision history"}}
 
     def submit(self, payload, role="a"):
         response = self.tool("submit_lesson", payload, role)
@@ -708,15 +733,33 @@ class Hub:
             urls.add(url)
         return urls
 
-    def await_tail_url(self, marker):
-        deadline = time.monotonic() + 30
+    def await_tail_url(self, marker, timeout=30):
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self.tail_broken or self.tail is None or self.tail.poll() is not None:
-                raise Blocked("tail-window-incomplete")
+                raise Blocked("tail-stream-broken")
             if self.origin + "/healthz?verify=" + marker in self.tail_verify_urls():
                 return
             time.sleep(0.2)
-        raise Blocked("tail-window-incomplete")
+        raise Blocked("tail-marker-missing")
+
+    def tail_barrier(self, marker, role, unavailable):
+        """Send one marker until the tail observes it.
+
+        Wrangler attaches its tail session seconds after the process starts, so a single
+        early request can precede the attachment; resending the same URL keeps the barrier.
+        """
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            code, _ = self.request("GET", "/healthz?" + TAIL_URL + "=" + marker, role)
+            require(code == 200, unavailable)
+            try:
+                self.await_tail_url(marker, timeout=5)
+                return
+            except Blocked as exc:
+                if str(exc) != "tail-marker-missing":
+                    raise
+        raise Blocked("tail-marker-missing")
 
     def stop_tail(self):
         if self.tail is None:
@@ -748,8 +791,20 @@ class Hub:
         while time.monotonic() < deadline:
             if self.tail_broken or self.tail is None or self.tail.poll() is not None:
                 break
-            received = {event.get("event", {}).get("request", {}).get("url")
-                        for event in tuple(self.tail_events) if event.get("outcome") == "ok"}
+            received = set()
+            for event in tuple(self.tail_events):
+                if event.get("outcome") != "ok":
+                    continue
+                request = event.get("event", {}).get("request", {})
+                url = request.get("url")
+                if isinstance(url, str):
+                    received.add(url)
+                headers = request.get("headers")
+                if isinstance(headers, dict):
+                    marker = next((value for key, value in headers.items() if key.lower() == "x-portwright-verify"), None)
+                    if isinstance(marker, str) and re.fullmatch(
+                            r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}-[0-9]+", marker):
+                        received.add(self.origin + "/mcp?verify=" + marker)
             if expected_urls <= received:
                 complete = True
                 break
@@ -759,8 +814,12 @@ class Hub:
         # so an observed leak is a failure, never hidden behind a missing-receipt block.
         self.tail_snapshot = json.dumps(self.tail_events, ensure_ascii=False)
         require(not any(sample in self.tail_snapshot for sample in samples), "secret-leaked-tail")
-        if not complete or self.tail_broken or self.tail_pending:
-            raise Blocked("tail-window-incomplete")
+        if self.tail_broken:
+            raise Blocked("tail-stream-broken")
+        if self.tail_pending:
+            raise Blocked("tail-frame-partial")
+        if not complete:
+            raise Blocked("tail-receipts-missing")
 
     def teardown(self):
         errors = False
@@ -889,7 +948,7 @@ class Hub:
         if not isinstance(entries, list):
             raise Blocked("personal-list-incomplete")
         personal = [entry for entry in entries if isinstance(entry, dict) and
-                    str(entry.get("uri", "")).startswith("skill://gisul/personal/")]
+                    str(entry.get("uri", "")).startswith(PERSONAL_URI_PREFIX)]
         require(len(personal) == len(expected) and all(
                 any(approved_personal_entry(entry, approved) for entry in personal)
                 for approved in expected), "personal-inventory-mismatch")
@@ -904,7 +963,7 @@ class Hub:
         self.personal_resource(*candidate)
 
     def personal_resource(self, approved, file):
-        uri = f"skill://gisul/personal/{approved['name']}/{file['path']}"
+        uri = f"{PERSONAL_URI_PREFIX}{approved['name']}/{file['path']}"
         code, result = self.rpc("resources/read", {"uri": uri}, "personal")
         if code != 200 or not isinstance(result, dict):
             raise Blocked("personal-resource-unavailable")
@@ -1063,7 +1122,8 @@ class Hub:
             if not isinstance(expected, dict):
                 raise Blocked("injection-expectations-missing")
             payload = {"request_id": str(uuid.uuid4()), **{key: case[key] for key in
-                      ("service_id", "kind", "body", "doc_url", "success_evidence")}}
+                      ("service_id", "kind", "doc_url", "success_evidence")},
+                      "body": dated(case["body"])}
             response = self.submit(payload, "batch")
             row = self.drain(response["intake_id"])
             gate_rows = self.rows("events", "intake_id='" + response["intake_id"] +
@@ -1085,7 +1145,7 @@ class Hub:
                 require(len(gate_rows) >= 1, "injection-gate-proof-missing")
                 delivered = self.read_notes(trial=True)
                 require((row.get("note_id"), row.get("revision")) not in visible_notes(delivered)
-                        and all(case["body"] not in item.get("text", "") for item in delivered["notes"]),
+                        and all(payload["body"] not in item.get("text", "") for item in delivered["notes"]),
                         "injection-delivered")
             counts[case["class"]] += 1
         require(counts == {"normal": 10, "injection": 10}, "injection-corpus-incomplete")
@@ -1232,7 +1292,8 @@ class Hub:
         if other_audience == "personal":
             code, result = self.rpc("skills/list", {}, "other", origin=other)
             skills = result.get("result", result).get("skills", []) if isinstance(result, dict) else []
-            require(code == 200 and any(item.get("name") == "aim" for item in skills),
+            require(code == 200 and any(isinstance(item, dict) and
+                    (item.get("frontmatter") or {}).get("name") == "aim" for item in skills),
                     "personal-control-missing")
         else:
             code, own = self.request("GET", "/sync", "other", origin=other)
@@ -1270,14 +1331,14 @@ class Hub:
         manifest_key = f"releases/{self.release_commit()}/inventory.json"
         require(manifest_key in listing, "release-manifest-missing")
         manifest = json.dumps(self.r2_object(manifest_key), ensure_ascii=False, separators=(",", ":"))
-        require("skill://gisul/personal/" not in manifest and '"origin":"personal"' not in manifest,
+        require(PERSONAL_URI_PREFIX not in manifest and '"origin":"personal"' not in manifest,
                 "personal-package-published")
 
-    def deployment(self):
+    def deployment(self, resource="settings"):
         # Cloudflare API access is restricted to the worker's settings. No value is logged.
         worker = os.environ["HUB_VERIFY_WORKER"]
         account = os.environ["HUB_VERIFY_ACCOUNT_ID"]
-        url = f"https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts/{worker}/settings"
+        url = f"https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts/{worker}/{resource}"
         req = urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["HUB_VERIFY_CLOUDFLARE_TOKEN"]})
         try:
             with OPEN(req, timeout=30) as response:
@@ -1292,10 +1353,13 @@ class Hub:
         cases = json.loads(_corpus("secrets-corpus.json").read_text())["cases"]
         samples = [assemble(case["parts"]) for case in cases if case["expect"] == "reject"]
         # Deployment must not mirror the worker anywhere but this tail.
-        config = self.deployment()
-        observability = config.get("observability")
-        require(isinstance(observability, dict) and observability.get("enabled") is False,
-                "log-channel-exposed")
+        # Logging channels live in script-settings; the plain settings resource omits
+        # observability. The API stores an explicit {"enabled": false} as null (observed
+        # 2026-09-26 by PATCH then GET), so null is the disabled state and true never passes.
+        config = self.deployment("script-settings")
+        require("observability" in config and
+                (config["observability"] is None or (isinstance(config["observability"], dict)
+                 and config["observability"].get("enabled") is False)), "log-channel-exposed")
         require(not config.get("logpush") and not config.get("tail_consumers"),
                 "log-channel-exposed")
         start_marker = self.run_id + "-start"
@@ -1306,9 +1370,7 @@ class Hub:
         source_before = tuple(self.count(table, source_where) for table in ("intake", "events"))
         control = self.submit(self.note(), "control")
         # The exact start URL is observed in the tail before any sample is sent.
-        code, _ = self.request("GET", "/healthz?" + TAIL_URL + "=" + start_marker, "control")
-        require(code == 200, "tail-control-unavailable")
-        self.await_tail_url(start_marker)
+        self.tail_barrier(start_marker, "control", "tail-control-unavailable")
         expected_urls = {self.origin + "/healthz?verify=" + marker
                          for marker in (start_marker, end_marker)}
         tools = {
@@ -1365,9 +1427,7 @@ class Hub:
                 "control-not-published")
         self.admin("tokens", {"action": "revoke",
                               "token_hash": hashlib.sha256(self.token("control").encode()).hexdigest()})
-        code, _ = self.request("GET", "/healthz?" + TAIL_URL + "=" + end_marker, "read")
-        require(code == 200, "tail-end-control-unavailable")
-        self.await_tail_url(end_marker)
+        self.tail_barrier(end_marker, "read", "tail-end-control-unavailable")
         # Scan all new rows, irrespective of owner, without retaining other users' text.
         self.secret_rows(samples)
         hashes = [hashlib.sha256(self.token(role).encode()).hexdigest()
@@ -1633,7 +1693,9 @@ class Hub:
             "uri": uri.rsplit("/", 1)[0], "_meta": {
                 "io.gisul/commit": pin, "io.portwright/include_trial": True}}, "read")
         if recalled and isinstance(directory, dict) and directory.get("error", {}).get("message") == "NOT_FOUND":
-            require(code in (200, 404) and not remaining, "recall-directory-sibling-hidden")
+            # §7.3 hides the whole pinned package when it contains a recalled note.
+            # The sibling is checked in the *current* release, not the old pin.
+            require(code in (200, 404), "recall-directory-unavailable")
             return
         require(code == 200 and isinstance(directory, dict) and "error" not in directory,
                 "recall-directory-unavailable")
@@ -1644,7 +1706,7 @@ class Hub:
         visible = {item["uri"] for item in resources}
         require((uri in visible) != recalled, "recall-directory-visibility")
         if recalled:
-            require(remaining <= visible, "recall-directory-sibling-hidden")
+            require(visible <= remaining, "recall-directory-unexpected-sibling")
         else:
             return visible - {uri}
 
@@ -1656,7 +1718,7 @@ class Hub:
         require(row["state"] == "published", "recall-trial-missing")
         note_id, revision = row["note_id"], row["revision"]
         self.await_git(note_id, revision, "trial")
-        other_row = self.drain(self.submit(self.note(suffix="\nUnrelated recall control.\n"))["intake_id"])
+        other_row = self.drain(self.submit(self.note(suffix="\nThe repository stores the files and revision history of a project.\n"))["intake_id"])
         require(other_row["state"] == "published", "recall-other-control-missing")
         other_pair = (other_row["note_id"], other_row["revision"])
         # The pin is the release the deployment actually serves, not a local FETCH_HEAD.
@@ -1673,7 +1735,7 @@ class Hub:
         path = recall_path(note_id, revision)
 
         def recall_target():
-            updated = self.note(suffix="\nThe documented route changed again.\n")
+            updated = self.note(suffix="\nThe files have a recorded revision history in the repository.\n")
             updated.update(note_id=note_id, expected_revision=revision)
             new = self.drain(self.submit(updated)["intake_id"])
             require(new["state"] == "published" and new["revision"] != revision,
@@ -1714,7 +1776,7 @@ class Hub:
             self.check_directory(target["uri"], pin, recalled=True, remaining=remaining)
 
         self.local_sync(note_id, revision, recall_target)
-        stable = self.submit(self.note(suffix="\nIndependent stable control.\n"))
+        stable = self.submit(self.note(suffix="\nA repository also stores the revision history of its files.\n"))
         proven = self.drain(stable["intake_id"])
         require(proven["state"] == "published", "stable-control-missing")
         stable_id, stable_rev = proven["note_id"], proven["revision"]

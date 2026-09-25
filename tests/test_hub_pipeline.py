@@ -684,6 +684,15 @@ class HubFixture:
             if duplicate:
                 return 200, {"granted": False, "duplicate": True}, {}
             value = int(body.get("reserve_micro_usd", 0))
+            # Mirror the Worker: intake reservations need an intake row (D1 enforces the
+            # events.intake_id foreign key and answers 500), confirm needs a note revision.
+            purpose = body.get("purpose")
+            intake_id = body.get("intake_id")
+            if purpose not in ("intake", "confirm", "bundle") or (purpose == "intake" and not intake_id) or (
+                    purpose == "confirm" and not body.get("note_id")):
+                return 400, {"error": "invalid_params"}, {}
+            if intake_id and self.conn.execute("SELECT 1 FROM intake WHERE id=?", (intake_id,)).fetchone() is None:
+                return 500, {"error": "internal"}, {}
             used = self.conn.execute(
                 "SELECT COALESCE(SUM(value),0) c FROM events WHERE month=? AND kind IN ('cost','reservation')", (month,)
             ).fetchone()["c"]
@@ -691,10 +700,10 @@ class HubFixture:
                 return 409, {"error": "budget"}, {}
             reservation_id = str(uuid.uuid4())
             self.conn.execute(
-                "INSERT INTO events (id, kind, action, operation_id, value, payload, month, created, eligible)"
-                " VALUES (?,?,?,?,?,?,?,?,1)",
-                (reservation_id, "reservation", "reserved", operation_id, value,
-                 json.dumps({key: body[key] for key in ("request_digest", "bytes") if key in body}),
+                "INSERT INTO events (id, intake_id, kind, action, operation_id, value, payload, month, created, eligible)"
+                " VALUES (?,?,?,?,?,?,?,?,?,1)",
+                (reservation_id, intake_id, "reservation", "reserved", operation_id, value,
+                 json.dumps({"purpose": purpose, **{key: body[key] for key in ("request_digest", "bytes") if key in body}}),
                  month, int(time.time())),
             )
             self.conn.commit()
@@ -903,6 +912,11 @@ class GateTests(unittest.TestCase):
         self.assertEqual((malicious.state, malicious.reason_code), ("held", "injection_suspected"))
         personal = hp.gate_submission(self.item(), self.domains, _fixture_client(personal=0.6), None)
         self.assertEqual((personal.state, personal.reason_code), ("rejected", "identifier"))
+        # A real injection also scores low document support; the security verdict must win.
+        injection = hp.gate_submission(self.item(), self.domains, _fixture_client(supported=0.05, evidence_consistent=0.6, malicious=0.95), None)
+        self.assertEqual((injection.state, injection.reason_code), ("held", "injection_suspected"))
+        exposed = hp.gate_submission(self.item(), self.domains, _fixture_client(supported=0.5, malicious=0.9, personal=0.6), None)
+        self.assertEqual((exposed.state, exposed.reason_code), ("rejected", "identifier"))
 
     def test_oversized_serialized_request_holds_before_reserve(self):
         big_document = ("문서 " * 8_000)  # > 24KiB of multibyte document text
@@ -1247,25 +1261,25 @@ class HubClientTests(unittest.TestCase):
     def test_budget_reserve_settle_and_duplicate(self):
         client = self.client
         budget = hp.Budget(client)
-        grant = budget.reserve(operation_id="op-1", purpose="intake", target_digest="sha256:" + "a" * 64, reserve_micro_usd=5000)
+        grant = budget.reserve(operation_id="op-1", purpose="bundle", target_digest="sha256:" + "a" * 64, reserve_micro_usd=5000)
         self.assertEqual(grant["month"], "2026-09")
         self.assertTrue(budget.settle(grant["reservation_id"], 3000, usage={"input_tokens": 1}))
         rows = self.fixture.conn.execute("SELECT kind, action, value, month FROM events ORDER BY rowid").fetchall()
         self.assertEqual([(row["kind"], row["action"], row["value"], row["month"]) for row in rows], [("reservation", "settled", 0, "2026-09"), ("cost", "settled", 3000, "2026-09")])
         with self.assertRaises(hp.BudgetExhausted):
-            budget.reserve(operation_id="op-1", purpose="intake", target_digest="sha256:" + "a" * 64, reserve_micro_usd=5000)
+            budget.reserve(operation_id="op-1", purpose="bundle", target_digest="sha256:" + "a" * 64, reserve_micro_usd=5000)
 
     def test_budget_cap_retains_reservations_and_reports_availability(self):
         self.fixture.cap = 4000
         budget = hp.Budget(self.client)
         with self.assertRaises(hp.BudgetExhausted):
-            budget.reserve(operation_id="op-over", purpose="intake", target_digest="x", reserve_micro_usd=9000)
-        budget.reserve(operation_id="op-2", purpose="intake", target_digest="x", reserve_micro_usd=3000)
+            budget.reserve(operation_id="op-over", purpose="bundle", target_digest="x", reserve_micro_usd=9000)
+        budget.reserve(operation_id="op-2", purpose="bundle", target_digest="x", reserve_micro_usd=3000)
         reserved = self.fixture.conn.execute("SELECT value, action FROM events WHERE kind='reservation'").fetchone()
         self.assertEqual((reserved["value"], reserved["action"]), (3000, "reserved"))
         self.assertTrue(budget.allows_new_work())
         with self.assertRaises(hp.BudgetExhausted):
-            budget.reserve(operation_id="op-3", purpose="intake", target_digest="x", reserve_micro_usd=3000)
+            budget.reserve(operation_id="op-3", purpose="bundle", target_digest="x", reserve_micro_usd=3000)
         self.fixture.cap = 0
         self.assertFalse(budget.allows_new_work())
 
@@ -2285,6 +2299,27 @@ class MigrateNotesTests(unittest.TestCase):
         self.assertTrue(report["commit"])
         second = hp.migrate_notes(self.commons, ROOT, self.fixture.url, "public", self.source, self.evidence)
         self.assertTrue(any(entry.get("reason_code") == "already_migrated" for entry in second["skipped"]))
+
+    def test_tracked_template_outside_manifest_is_skipped_not_parsed(self):
+        (self.source / "failures").mkdir(exist_ok=True)
+        (self.source / "failures" / "_TEMPLATE.md").write_text("---\ndate: YYYY-MM-DD\n---\n", encoding="utf-8")
+        commit_all(self.source, "add template")
+        source_commit = hp.CommonsRepo(self.source).head()
+        write_jev_fixture(self.jev, f"hub-gate-{uuid.uuid5(hp.MIGRATION_NAMESPACE, f'{source_commit}:services/acme.md')}")
+        report = hp.migrate_notes(self.commons, ROOT, self.fixture.url, "public", self.source, self.evidence)
+        self.assertTrue(self.commons.joinpath("services", "acme.md").is_file())
+        self.assertIn({"source_path": "failures/_TEMPLATE.md", "reason_code": "not_in_manifest"}, report["skipped"])
+        self.assertFalse(self.commons.joinpath("failures", "_TEMPLATE.md").exists())
+
+    def test_live_migration_reserves_without_an_intake_row(self):
+        from portwright import jev
+
+        with patch.object(jev.JevClient, "from_env", lambda: FakeLiveTransport()):
+            report = hp.migrate_notes(self.commons, ROOT, self.fixture.url, "public", self.source, self.evidence)
+        self.assertEqual(report["held"], [])
+        self.assertTrue(self.commons.joinpath("services", "acme.md").is_file())
+        rows = self.fixture.conn.execute("SELECT intake_id, payload FROM events WHERE kind='reservation'").fetchall()
+        self.assertEqual([(row["intake_id"], json.loads(row["payload"])["purpose"]) for row in rows], [(None, "bundle")])
 
     def test_missing_document_url_holds_without_publishing(self):
         missing = self.tmp / "missing.json"

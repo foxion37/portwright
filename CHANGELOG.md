@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-09-26
+### Fixed
+- One-time note migration now processes only the paths listed in the evidence manifest. A tracked `failures/_TEMPLATE.md` failed note-ID parsing and aborted the whole run before any gate ran.
+- Migration model calls now reserve budget as operator `bundle` work instead of `intake` work. A migrated note has no intake row, and the Hub's foreign key rejected the reservation with HTTP 500, so every live migration gate was held as `budget_unavailable`.
+- The model gate now reports security verdicts before evidence sufficiency: a personal-identifier suspicion rejects as `identifier` and a malicious suspicion holds as `injection_suspected` even when document support is also low. Live JEV scored all ten fixed injection lessons malicious ≥ 0.91, but they were reported as `evidence_not_specific` because support was checked first.
+- `verify_hub.py` normal controls now cite official pages that pass the live gate. Six fixed normal lessons and the default synthetic note cited pages that exceed the 24,000-byte model request, redirect, exceed 1 MiB, or contain example credentials, so every live scenario would have held its control. Synthetic lesson dates now follow the current UTC day, which the gate requires to match the server-generated filename.
+- The live Hub verifier now handles Cloudflare's optional R2 pagination metadata on short final pages, reads logging settings from `/script-settings`, waits for a real tail attachment, and correlates redacted authenticated request URLs via a benign header. Personal v1 URI verification uses the deployed `skill://gisul/portwright/personal/` namespace; recall verification follows §7.3 by allowing an old pinned package to disappear while still requiring other notes in the current release. Synthetic recall controls now cite supported documentation rather than an unrelated instruction.
+
 ## [2.2.1] - 2026-09-26
 ### Fixed
 - Hub sync, local MCP relay, and live verifier now send a stable User-Agent. Cloudflare workers.dev returned error 1010 to Python's default User-Agent; authenticated sync was blocked before reaching the Worker.
@@ -146,3 +154,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [2.1.0]: ../../releases/tag/v2.1.0
 [2.2.0]: ../../releases/tag/v2.2.0
 [2.2.1]: ../../releases/tag/v2.2.1
+[2.2.2]: ../../releases/tag/v2.2.2
