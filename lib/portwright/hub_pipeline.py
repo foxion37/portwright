@@ -551,6 +551,9 @@ class ModelGateway:
 def _as_gateway(model: Any, budget: Any, **kwargs: Any) -> ModelGateway:
     if isinstance(model, ModelGateway):
         for key, value in kwargs.items():
+            if key == "intake_id" and model.purpose != "intake":
+                # Only an intake reservation references an intake row (events.intake_id FK).
+                continue
             if getattr(model, key, None) is None:
                 setattr(model, key, value)
         return model
@@ -879,11 +882,16 @@ def _gate_evidence(raw: Any) -> dict:
 
 
 def _gate_answers(judgment: Any) -> dict[str, float]:
-    """Gate ④: fixed thresholds; anything unreadable or missing is held, never open."""
+    """Gate ④: fixed thresholds; anything unreadable or missing is held, never open.
+
+    Every answer is validated first; then the security verdicts decide the reason before
+    evidence sufficiency, so an injection is reported as one even when its document
+    support is also low.
+    """
     if getattr(judgment, "status", "unknown") != "ok":
         raise _GateStop("held", "model_unavailable")
     answers: dict[str, float] = {}
-    for key, (bound, direction) in NOUL_BOUNDS.items():
+    for key in NOUL_BOUNDS:
         answer = (getattr(judgment, "answers", {}) or {}).get(key)
         if not isinstance(answer, dict) or answer.get("type") != "noul":
             raise _GateStop("held", "model_unavailable")
@@ -893,14 +901,16 @@ def _gate_answers(judgment: Any) -> dict[str, float]:
         value = float(value)
         if not math.isfinite(value) or not 0.0 <= value <= 1.0:
             raise _GateStop("held", "model_unavailable")
-        if not (value >= bound if direction == "ge" else value < bound):
-            if key == "personal":
-                # §A-5: a personal-identifier suspicion is an immediate identifier rejection.
-                raise _GateStop("rejected", "identifier")
-            if key == "malicious":
-                raise _GateStop("held", "injection_suspected")
-            raise _GateStop("held", "evidence_not_specific")
         answers[key] = value
+    failed = {key for key, (bound, direction) in NOUL_BOUNDS.items()
+              if not (answers[key] >= bound if direction == "ge" else answers[key] < bound)}
+    if "personal" in failed:
+        # §A-5: a personal-identifier suspicion is an immediate identifier rejection.
+        raise _GateStop("rejected", "identifier")
+    if "malicious" in failed:
+        raise _GateStop("held", "injection_suspected")
+    if failed:
+        raise _GateStop("held", "evidence_not_specific")
     return answers
 
 
@@ -2112,6 +2122,11 @@ def _run_migration(run: _RunContext, source: str | Path, evidence_path: str | Pa
     evidence = _load_migration_evidence(evidence_path)
     source_commit = source_repo.head()
     for relative in source_repo.list_paths("services", "failures"):
+        # §4.4: only the fixed evidence manifest is migrated; tracked templates and
+        # other non-distributable files are never parsed as notes.
+        if relative not in evidence:
+            run.report["skipped"].append({"source_path": relative, "reason_code": "not_in_manifest"})
+            continue
         data = source_repo.read(relative) if any(pattern.fullmatch(relative) for pattern in NOTE_PATH_RES[:2]) else None
         if data is None:
             continue
@@ -2147,7 +2162,9 @@ def _run_migration(run: _RunContext, source: str | Path, evidence_path: str | Pa
             run.report["skipped"].append({"source_path": relative, "reason_code": "already_migrated"})
             continue
         item["git"] = _git_view(run.notes, item)
-        gateway = run.gateway("intake", intake_id=intake_id, target_digest=item["expected_revision"])
+        # A migrated note has no intake row, so its reservation cannot be an intake one
+        # (events.intake_id is a foreign key); it is an operator gate over existing bytes.
+        gateway = run.gateway("bundle", target_digest=item["expected_revision"])
         result = gate_submission(item, run.domains(), gateway, Budget(run.client()))
         run.report["intakes"][intake_id] = result.to_dict()
         if result.reason_code == "settlement_failed":
