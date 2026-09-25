@@ -18,11 +18,33 @@ There are three audience-specific delivery surfaces. **Personal** delivery keeps
 
 ## Reading and contributing
 
-Locally, a note id resolves in this order: `_private` → tracked notes → `_hub`. Duplicate ids within one source are errors; an id repeated across sources is a warned override. `_hub` is a planned gitignored local cache of synced Hub notes, separate from code updates. Without a cached procedure, the Agent uses current official documentation and caches the derived result. Users do not need access to the private commons repository to read delivered notes.
+Locally, a note id resolves in this order: `_private` → tracked notes → the selected `_hub` snapshot. Duplicate ids within one source are errors; an id repeated across sources is a warned override. Hub sync writes a new local generation without changing code and switches both note roots through one state pointer. Only the selected Hub is read; public and company never fall back to one another. An unconfigured M1 home still reads its existing local `_hub` notes, but enabling a shared Hub hides those unverified notes and requires an active generation. Without a cached procedure, the Agent uses current official documentation and caches the derived result. Users do not need access to the private commons repository to read delivered notes.
 
-In the planned shared Hubs, only `stable` notes appear in default preflight, bundles, and MCP reads. A `trial` note passes publication checks but remains experimental and is visible only by explicit opt-in; publication is not an endorsement. Three confirmations from distinct invite-token lineages plus Operator review are required for `stable`, and a changed revision needs fresh confirmations. Two reports from distinct lineages recall a `trial` revision; a `stable` recall needs Operator confirmation. A recall targets the note id and revision digest, including current reads, old pinned releases, and synced local caches when they synchronize. An offline cache cannot learn a new recall until it reconnects.
+Shared Hubs serve `stable` notes by default in preflight, bundles, and MCP reads. A `trial` note is experimental and appears locally only with explicit `--include-trial` or persistent `include_trial: true` on that Hub. Three confirmations from distinct invite-token lineages plus Operator review are required for `stable`; a changed revision needs fresh confirmations. Two distinct lineages can report a `trial` revision; `stable` recall also needs Operator confirmation. A recall targets the note id and revision digest, including pinned releases and local caches once synchronized. Offline clients apply all previously received recalls, but cannot learn new ones before reconnecting.
 
-Submission is **planned for M2 over MCP only** (`submit_lesson`, `confirm_lesson`, `report_failure`). GitHub Issue/PR free-text intake is not supported. Invite tokens are issued by the Operator for the public Hub or by a company administrator for the company Hub; there is no self-signup. A token is used for authentication, not as a credential for the user's external tools. The Hub stores only its hash, organization, scope (`read|submit|operator`), expiry, and a non-identifying lineage id, never names, email addresses, or IP addresses.
+Submission uses MCP only (`submit_lesson`, `confirm_lesson`, `report_failure`); there is no CLI submit command or Issue/PR free-text intake. A configured local MCP server exposes those tools only when its selected Hub and token environment variable are available. It screens free text locally; confirmations and failure reports must also refer to a note id and revision in that Hub's active snapshot before any request is sent. A note read explicitly from company cannot be reported to a public default Hub. The Hub independently screens again before storage. Invite tokens are issued by the Operator for the public Hub or by a company administrator for the company Hub; there is no self-signup. They authenticate Hub access, not external-tool access. The Hub stores only their hash, organization, scope (`read|submit|operator`), expiry, and non-identifying lineage id.
+
+### Local sync and supported MCP Clients
+
+After the public Hub is deployed and an invite token is provided through an approved runtime injector, create `<content-home>/_local/hub/config.json` (local only, never exported):
+
+```json
+{"schema_version":1,"active":"public","hubs":{"public":{"url":"https://public-hub.example.org","token_env":"PORTWRIGHT_PUBLIC_HUB_TOKEN"}}}
+```
+
+The URL must be a bare HTTPS origin. `token_env` is an environment-variable **name**, never its value; supply the credential to the CLI and local MCP process at runtime. Company users configure a separate `company` entry and select it explicitly or set `active`. No personal Hub sync.
+
+Without `--hub`, catalog, preflight, MCP reads and submissions use `config.active`. If the config omits `active`, local tracked and private notes still work, but no Hub is selected by default, even after an explicit sync; a present but invalid `active` is rejected. A one-off `hub sync --hub company` updates only the company snapshot; it does not change the public default. To switch the default, change `active` explicitly. A damaged cached note fails offline reads closed, but an online sync can replace it after validating the saved recall projection and a fresh Hub response. The next sync lock owner removes only proven inactive generations and incomplete generations belonging to that Hub.
+
+```sh
+<portwright>/bin/portwright hub sync --hub public --home <content-home>
+<portwright>/bin/portwright preflight acme --hub public --home <content-home>
+<portwright>/bin/portwright hub sync --offline --home <content-home>
+```
+
+`hub sync --include-trial` opts in once. Set `\"include_trial\":true` inside that Hub's config entry for persistent opt-in; otherwise trial is not stored or shown. An offline sync verifies the active snapshot and previously received recalls without a network request or token lookup. Preflight reports the last successful sync time; it does not claim current online recall freshness. If a sync is interrupted, leave `sync.lock` untouched until you have confirmed no sync process remains.
+
+For a supported MCP Client, register the local stdio command `<portwright>/bin/portwright mcp --home <content-home>` using the Client's own MCP configuration; invoke its `preflight`, `get_note`, and `status` tools. With a configured Hub and runtime token, its three screened submission tools also appear. Do not paste token values into Client settings, commands, or URLs. A Client connected directly to a remote Hub bypasses local screening; the remote Hub's screening is still mandatory.
 
 ## Boundaries and protection
 

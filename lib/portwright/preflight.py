@@ -29,15 +29,16 @@ class PreflightDecision:
     freshness: dict[str, Any] = field(default_factory=dict)
     tier: str = "confirm"
     rationale: dict[str, str] = field(default_factory=dict)
+    hub_synced_at: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
 
 
 class Preflight:
-    def __init__(self, root: Path, jev: JevClient | None = None):
+    def __init__(self, root: Path, jev: JevClient | None = None, *, hub: str | None = None, include_trial: bool = False):
         self.root = root.resolve()
-        self.catalog = ContractCatalog(self.root)
+        self.catalog = ContractCatalog(self.root, hub=hub, include_trial=True if include_trial else None)
         self.jev = jev or JevClient.from_env()
         self.router = ProfileRouter(self.root, self.jev)
 
@@ -52,6 +53,8 @@ class Preflight:
         evidence_fetched_at: str | None = None,
         evidence_text: str | None = None,
     ) -> PreflightDecision:
+        from .hub_sync import snapshot
+        hub_snapshot, _ = snapshot(self.root, self.catalog.hub, include_trial=self.catalog._trial())
         if not SERVICE_ID_RE.fullmatch(service_id):
             raise ValueError("service id must be lowercase kebab-case")
         cwd = (cwd or Path.cwd()).resolve()
@@ -170,6 +173,7 @@ class Preflight:
             freshness=freshness.to_dict(),
             tier=tier.tier,
             rationale={"profile": resolution.rationale, "freshness": freshness.rationale, "tier": tier.rationale},
+            hub_synced_at=hub_snapshot["synced_at"] if hub_snapshot else None,
         )
 
 
@@ -183,6 +187,8 @@ def run_preflight(
     evidence_version: str | None = None,
     evidence_fetched_at: str | None = None,
     evidence_text: str | None = None,
+    hub: str | None = None,
+    include_trial: bool = False,
     jev: JevClient | None = None,
     engine: Preflight | None = None,
 ) -> PreflightDecision:
@@ -191,7 +197,7 @@ def run_preflight(
     Every surface (CLI, MCP) calls this, so the ledger never depends on which surface asked.
     `engine` lets a long-lived surface reuse one resolver; it must point at `root`.
     """
-    resolver = engine or Preflight(root, jev)
+    resolver = engine if engine is not None and not hub and not include_trial else Preflight(root, jev, hub=hub, include_trial=include_trial)
     decision = resolver.resolve(
         service_id,
         intent,
@@ -226,6 +232,8 @@ def render_decision(decision: PreflightDecision) -> str:
     else:
         lines.append(f"Profile: (none) {decision.rationale.get('profile', '')}")
     lines.append(f"Procedure: {decision.procedure or '(cache miss)'}")
+    if decision.hub_synced_at:
+        lines.append(f"Hub last synced: {decision.hub_synced_at} (offline recall: last-sync)")
     freshness = decision.freshness
     if freshness:
         lines.append(f"Freshness: {freshness['state']} -> {freshness['action']} ({freshness['rationale']})")

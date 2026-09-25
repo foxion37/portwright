@@ -1,0 +1,65 @@
+# Install as the only workflow in commons after pinning the approved v2.2.0 SHA.
+name: Commons Hub
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+    inputs:
+      retry_held:
+        description: Retry held submissions after correcting their evidence or policy
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: portwright-hub-writer
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: commons
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Validate immutable code reference
+        env:
+          PORTWRIGHT_CODE_REF: ${{ vars.PORTWRIGHT_CODE_REF }}
+        run: |
+          python3 -c 'import os,re; assert re.fullmatch("[0-9a-f]{40}",os.environ["PORTWRIGHT_CODE_REF"]), "invalid code reference"'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: foxion37/portwright
+          ref: ${{ vars.PORTWRIGHT_CODE_REF }}
+          path: code
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release tag and disable git hooks
+        env:
+          PORTWRIGHT_CODE_REF: ${{ vars.PORTWRIGHT_CODE_REF }}
+        run: |
+          test "$(git -C code rev-parse HEAD)" = "$PORTWRIGHT_CODE_REF"
+          test "$(git -C code rev-parse 'v2.2.0^{commit}')" = "$PORTWRIGHT_CODE_REF"
+          git -C commons config core.hooksPath /dev/null
+          git -C commons config user.name portwright-hub
+          git -C commons config user.email portwright-hub@users.noreply.github.com
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Gate, commit, recall, build, publish and acknowledge
+        env:
+          HUB_ORIGIN: ${{ vars.HUB_ORIGIN }}
+          HUB_AUDIENCE: ${{ vars.HUB_AUDIENCE }}
+          HUB_WORKFLOW_TOKEN: ${{ secrets.HUB_WORKFLOW_TOKEN }}
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          HUB_RETRY_HELD: ${{ inputs.retry_held == true && 'true' || 'false' }}
+        run: |
+          args=()
+          if [ "$HUB_RETRY_HELD" = true ]; then args+=(--retry-held); fi
+          python3 code/scripts/hub_pipeline.py --commons commons --code-root code --audience "$HUB_AUDIENCE" "${args[@]}"

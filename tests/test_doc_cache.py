@@ -162,5 +162,165 @@ class DocCacheTests(unittest.TestCase):
         self.assertIsNone(load_document(self.home, "../escape", URL))
 
 
+HTML = (
+    "<!doctype html><html><head><title>Guide</title>"
+    "<style>body{color:red}</style><script>var x=1;</script></head>"
+    "<body><h1>Install</h1><p>Run <code>tool --now</code> &amp; read <a href='/x'>docs</a>.</p>"
+    "<script>steal()</script></body></html>"
+)
+
+
+class FetchDocumentTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.home = Path(temporary.name)
+        (self.home / "services").mkdir()
+        resolver = patch.object(doc_cache, "_resolve_addresses", return_value=PUBLIC)
+        self.addCleanup(resolver.stop)
+        resolver.start()
+
+    def fetch(self, text: str = "docs body"):
+        return patch.object(doc_cache, "_fetch", return_value=text)
+
+    def test_host_allowed_is_exact_and_idna_normalized(self) -> None:
+        hosts = ["docs.example.com", "xn--bcher-kva.example"]
+        self.assertTrue(doc_cache.host_allowed(URL, hosts))
+        self.assertTrue(doc_cache.host_allowed("https://docs.example.com:443/x", hosts))
+        self.assertTrue(doc_cache.host_allowed("https://xn--bcher-kva.example/x", hosts))
+        self.assertTrue(doc_cache.host_allowed("https://bücher.example/x", hosts))
+        self.assertFalse(doc_cache.host_allowed("https://sub.docs.example.com/x", hosts))
+        self.assertFalse(doc_cache.host_allowed("https://notdocs.example.com/x", hosts))
+        self.assertFalse(doc_cache.host_allowed("https://docs.example.com.evil.test/x", hosts))
+        self.assertFalse(doc_cache.host_allowed(URL, []))
+        self.assertFalse(doc_cache.host_allowed(URL, None))
+        self.assertFalse(doc_cache.host_allowed(URL, ["DOCS.example.com "]))
+        self.assertFalse(doc_cache.host_allowed("not a url", hosts))
+
+    def test_path_prefixes_respect_segment_boundaries(self) -> None:
+        hosts = ["docs.example.com"]
+        prefixes = ["/docs/v1"]
+        self.assertTrue(doc_cache.host_allowed("https://docs.example.com/docs/v1/x", hosts, prefixes))
+        self.assertTrue(doc_cache.host_allowed("https://docs.example.com/docs/v1", hosts, prefixes))
+        self.assertTrue(doc_cache.host_allowed("https://docs.example.com/docs/v1/", hosts, prefixes))
+        self.assertTrue(doc_cache.host_allowed("https://docs.example.com/docs//v1/x", hosts, prefixes))
+        self.assertFalse(doc_cache.host_allowed("https://docs.example.com/docs/v1/../v1/x", hosts, prefixes))
+        self.assertFalse(doc_cache.host_allowed("https://docs.example.com/docs/v10/x", hosts, prefixes))
+        self.assertFalse(doc_cache.host_allowed("https://docs.example.com/other/v1/x", hosts, prefixes))
+        self.assertTrue(doc_cache.host_allowed("https://docs.example.com/other", hosts))
+
+    def test_path_prefix_escapes_and_traversal_fail_closed(self) -> None:
+        hosts = ["docs.example.com"]
+        prefixes = ["/docs/v1"]
+        for url in (
+            "https://docs.example.com/docs/%2e%2e/user",
+            "https://docs.example.com/docs/v1/../user",
+            "https://docs.example.com/%2e%2e/docs/v1/x",
+            "https://docs.example.com/docs/v1/%2Fuser",
+            "https://docs.example.com/docs/v1\\..\\user",
+        ):
+            with self.subTest(url=url):
+                self.assertFalse(doc_cache.host_allowed(url, hosts, prefixes))
+
+    def test_invalid_prefix_entries_fail_closed(self) -> None:
+        hosts = ["docs.example.com"]
+        for prefixes in (["docs/v1"], ["%2e"], ["/"], ["/docs/%2e"], [None], [7], ["/docs/v1", None]):
+            with self.subTest(prefixes=prefixes):
+                self.assertFalse(doc_cache.host_allowed("https://docs.example.com/docs/v1/x", hosts, prefixes))
+
+    def test_safe_url_path_normalizes_only_harmless_segments(self) -> None:
+        self.assertEqual(doc_cache.safe_url_path("/docs/v1/x"), "/docs/v1/x")
+        self.assertEqual(doc_cache.safe_url_path(""), "/")
+        self.assertEqual(doc_cache.safe_url_path("/docs//v1/x"), "/docs/v1/x")
+        self.assertEqual(doc_cache.safe_url_path("/docs/./v1/"), "/docs/v1")
+        for path in ("/docs/%2e%2e/x", "/docs/../x", "/a\\b", "/a\x00b"):
+            with self.subTest(path=path):
+                self.assertIsNone(doc_cache.safe_url_path(path))
+
+    def test_off_domain_never_fetches(self) -> None:
+        with self.fetch() as fetch:
+            with self.assertRaises(doc_cache._FetchFailed) as caught:
+                doc_cache.fetch_document(URL, ["other.example.com"])
+        self.assertEqual(caught.exception.category, "off_domain")
+        fetch.assert_not_called()
+        with self.fetch() as fetch:
+            with self.assertRaises(doc_cache._FetchFailed):
+                doc_cache.fetch_document(URL, [])
+        fetch.assert_not_called()
+
+    def test_allowed_host_returns_markdown_unchanged(self) -> None:
+        with self.fetch("plain <not html> body") as fetch:
+            text = doc_cache.fetch_document(URL, ["docs.example.com"])
+        self.assertEqual(text, "plain <not html> body")
+        fetch.assert_called_once_with(URL)
+
+    def test_allowed_host_extracts_html_text_without_script_or_style(self) -> None:
+        with self.fetch(HTML):
+            text = doc_cache.fetch_document(URL, ["docs.example.com"])
+        self.assertIn("Install", text)
+        self.assertIn("Run tool --now & read docs.", text)
+        self.assertNotIn("color:red", text)
+        self.assertNotIn("var x=1", text)
+        self.assertNotIn("steal()", text)
+        self.assertNotIn("<h1>", text)
+
+    def test_none_allowlist_is_the_local_cache_path(self) -> None:
+        with self.fetch("text"):
+            self.assertEqual(doc_cache.fetch_document(URL, None), "text")
+
+    def test_xml_prolog_and_leading_whitespace_still_extract(self) -> None:
+        document = '<?xml version="1.0" encoding="utf-8"?>\n<html><body>Hello <b>there</b></body></html>'
+        with self.fetch(document):
+            self.assertEqual(doc_cache.fetch_document(URL, ["docs.example.com"]), "Hello there")
+
+    def test_markdown_quoting_html_tags_is_not_parsed(self) -> None:
+        markdown = "Use `<html>` and `</html>` in the template.\n\nAnother line.\n"
+        with self.fetch(markdown):
+            self.assertEqual(doc_cache.fetch_document(URL, ["docs.example.com"]), markdown)
+
+    def test_refresh_document_extracts_html_text(self) -> None:
+        with self.fetch(HTML):
+            result = refresh_document(self.home, "acme", URL)
+        self.assertEqual(result["status"], "fetched")
+        cached = load_document(self.home, "acme", URL)
+        self.assertIn("Install", cached["text"])
+        self.assertNotIn("steal()", cached["text"])
+
+    def test_port_must_be_https_default(self) -> None:
+        for url in ("https://docs.example.com:8443/x", "https://docs.example.com:80/x", "http://docs.example.com/x"):
+            with self.subTest(url=url):
+                with self.assertRaises(doc_cache._FetchFailed) as caught:
+                    doc_cache._validate_url(url)
+                self.assertEqual(caught.exception.category, "invalid-url")
+        doc_cache._validate_url("https://docs.example.com:443/x")
+        doc_cache._validate_url(URL)
+
+    def test_non_utf8_body_is_refused(self) -> None:
+        class RawResponse:
+            def __init__(self, payload: bytes):
+                self.payload = payload
+
+            def read(self, limit: int) -> bytes:
+                return self.payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc) -> bool:
+                return False
+
+        with patch.object(doc_cache._OPENER, "open", return_value=RawResponse(b"ok\xff\xfe\x00end")):
+            with self.assertRaises(doc_cache._FetchFailed) as caught:
+                doc_cache._fetch(URL)
+        self.assertEqual(caught.exception.category, "not-utf8")
+        with patch.object(doc_cache._OPENER, "open", return_value=RawResponse(b"ok\xff\xfe\x00end")):
+            result = refresh_document(self.home, "acme", URL)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["error"], "not-utf8")
+        self.assertFalse(evidence_path(self.home).exists())
+        with patch.object(doc_cache._OPENER, "open", return_value=RawResponse("día".encode("utf-8"))):
+            self.assertEqual(doc_cache._fetch(URL), "día")
+
+
 if __name__ == "__main__":
     unittest.main()

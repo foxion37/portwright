@@ -1,0 +1,21 @@
+{
+  "name": "portwright-hub",
+  "version": "0.2.0",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260903.1",
+    "esbuild": "0.28.1",
+    "miniflare": "5.20260831.0-alpha",
+    "typescript": "^5.9.2",
+    "wrangler": "4.128.0"
+  },
+  "dependencies": {
+    "yaml": "2.9.0"
+  }
+}

@@ -39,6 +39,16 @@ def _parser() -> argparse.ArgumentParser:
     preflight.add_argument("--evidence-file", help="Text file with the current official docs excerpt (JEV noul support)")
     preflight.add_argument("--json", action="store_true")
     preflight.add_argument("--home")
+    preflight.add_argument("--hub", choices=("public", "company"))
+    preflight.add_argument("--include-trial", action="store_true")
+
+    hub = sub.add_parser("hub", help="Synchronize one shared Hub content snapshot")
+    hub_sub = hub.add_subparsers(dest="hub_command", required=True)
+    sync = hub_sub.add_parser("sync")
+    sync.add_argument("--hub", choices=("public", "company"))
+    sync.add_argument("--include-trial", action="store_true")
+    sync.add_argument("--offline", action="store_true")
+    sync.add_argument("--home")
 
     browser = sub.add_parser("browser", help="Select a browser menu candidate for a goal (extraction stays in the browser)")
     browser_sub = browser.add_subparsers(dest="browser_command", required=True)
@@ -154,6 +164,8 @@ def _preflight(args: argparse.Namespace) -> int:
         evidence_version=args.evidence_version,
         evidence_fetched_at=args.evidence_fetched_at,
         evidence_text=evidence_text,
+        hub=args.hub,
+        include_trial=args.include_trial,
     )
     print(json.dumps(decision.to_dict(), ensure_ascii=False, indent=2) if args.json else render_decision(decision))
     return 0
@@ -286,6 +298,11 @@ def main(argv: list[str] | None = None) -> int:
             return _check(args)
         if args.command == "preflight":
             return _preflight(args)
+        if args.command == "hub":
+            from .hub_sync import sync
+            print(json.dumps(sync(_root(args.home), hub=args.hub, include_trial=args.include_trial, offline=args.offline),
+                             ensure_ascii=False))
+            return 0
         if args.command == "memory":
             return _memory(args)
         if args.command == "browser":

@@ -1,6 +1,39 @@
 {
   "patterns": [
     {
+      "id": "email",
+      "regex": "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+      "scope": "content",
+      "public": true
+    },
+    {
+      "id": "private-ipv4",
+      "regex": "\\b(?:10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|172\\.(?:1[6-9]|2\\d|3[01])\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|169\\.254\\.\\d{1,3}\\.\\d{1,3})\\b",
+      "scope": "content",
+      "public": true
+    },
+    {
+      "id": "private-host",
+      "regex": "\\b(?:localhost|[A-Za-z0-9-]+\\.(?:local|internal|lan|home))\\b",
+      "flags": "i",
+      "scope": "content",
+      "public": true
+    },
+    {
+      "id": "private-ipv6",
+      "regex": "(?:\\bfd[0-9a-f]{2}:|\\bfe80:|(?<![0-9a-f:])::1(?![0-9a-f:]))",
+      "flags": "i",
+      "scope": "content",
+      "public": true
+    },
+    {
+      "id": "url-credentials",
+      "regex": "[a-z][a-z0-9+.-]*://[^\\s/:]+:[^\\s/@]+@",
+      "flags": "i",
+      "scope": "content",
+      "public": true
+    },
+    {
       "id": "absolute-home",
       "regex": "/(?:Users|home)/[a-z0-9_-]+/",
       "flags": "i",

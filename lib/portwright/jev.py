@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
@@ -37,20 +37,36 @@ def _unknown(error: str) -> Judgment:
 
 
 class JevClient:
-    """TypeSafe Jev caller. Fixture mode replays recorded responses and never goes live."""
+    """TypeSafe Jev caller. Fixture mode replays recorded responses and never goes live.
 
-    def __init__(self, api_key: str | None = None, fixtures: Path | None = None, record: bool = False):
+    ``before_send`` is the hub's pre-flight seam: it receives the exact serialized
+    request-body bytes before the Authorization header is built, and the transport
+    sends those identical bytes. Recording a request is incompatible with it, so a
+    hub caller cannot leave a recording path behind.
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        fixtures: Path | None = None,
+        record: bool = False,
+        before_send: Callable[[bytes], None] | None = None,
+    ):
+        if before_send is not None and record:
+            raise ValueError("request recording is not allowed with a before_send hook")
         self._api_key = api_key
         self.fixtures = fixtures
         self.record = record and fixtures is not None
+        self.before_send = before_send
 
     @classmethod
-    def from_env(cls) -> "JevClient":
+    def from_env(cls, before_send: Callable[[bytes], None] | None = None) -> "JevClient":
         fixtures = os.environ.get(FIXTURES_ENV)
         return cls(
             api_key=None if fixtures else os.environ.get(KEY_ENV),
             fixtures=Path(fixtures).expanduser() if fixtures else None,
             record=bool(os.environ.get("PORTWRIGHT_JEV_RECORD")),
+            before_send=before_send,
         )
 
     @property
@@ -93,6 +109,8 @@ class JevClient:
 
     def _live(self, request: dict[str, Any]) -> Judgment:
         body = json.dumps(request).encode("utf-8")
+        if self.before_send is not None:
+            self.before_send(body)
         http = urllib.request.Request(
             ENDPOINT,
             data=body,

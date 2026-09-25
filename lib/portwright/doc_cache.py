@@ -24,6 +24,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 
 from .contracts import SERVICE_ID_RE
@@ -34,6 +35,57 @@ _MAX_BYTES = 1024 * 1024
 _MAX_FILE_BYTES = _MAX_BYTES * 8
 _TIMEOUT = 20
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+# Only true HTML documents get text-extracted; markdown that quotes tags is kept.
+_HTML_DOC_RE = re.compile(r"^\s*(?:<\?xml[^>]*>\s*)?(?:<!doctype\s+html|<html[\s>/])", re.IGNORECASE)
+_HTML_SKIP_TAGS = frozenset({"script", "style"})
+_HTML_BLOCK_TAGS = frozenset(
+    {
+        "address", "article", "aside", "blockquote", "br", "dd", "div", "dl", "dt",
+        "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4",
+        "h5", "h6", "header", "hr", "li", "main", "nav", "ol", "p", "pre", "section",
+        "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul",
+    }
+)
+
+
+class _TextExtractor(HTMLParser):
+    """Visible text of an HTML document, excluding script and style bodies."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._skipped = 0
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag in _HTML_SKIP_TAGS:
+            self._skipped += 1
+        elif tag in _HTML_BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _HTML_SKIP_TAGS:
+            self._skipped = max(0, self._skipped - 1)
+        elif tag in _HTML_BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self._skipped:
+            self.parts.append(data)
+
+
+def html_to_text(html: str) -> str:
+    """Stdlib-only visible text: script/style dropped, entities decoded."""
+    parser = _TextExtractor()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:  # malformed markup: keep whatever text was collected
+        pass
+    lines = [line.strip() for line in "".join(parser.parts).split("\n")]
+    text = "\n".join(lines)
+    while "\n\n\n" in text:
+        text = text.replace("\n\n\n", "\n\n")
+    return text.strip()
 
 
 class _FetchFailed(Exception):
@@ -44,13 +96,13 @@ class _FetchFailed(Exception):
         self.category = category
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
+class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
 
 
 # ProxyHandler({}) disables environment proxy variables: no env, no auth.
-_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect)
 
 
 def _resolve_addresses(host: str) -> list:
@@ -82,6 +134,7 @@ def _validate_url(url: str) -> None:
         or parsed.password
         or parsed.query
         or parsed.fragment
+        or parsed.port not in (None, 443)
     ):
         raise _FetchFailed("invalid-url")
     host = parsed.hostname
@@ -105,14 +158,109 @@ def _fetch(url: str) -> str:
         with _OPENER.open(request, timeout=_TIMEOUT) as response:
             payload = response.read(_MAX_BYTES + 1)
     except urllib.error.HTTPError as exc:
+        exc.close()
         raise _FetchFailed("redirect" if 300 <= exc.code < 400 else "http") from exc
     except (urllib.error.URLError, OSError) as exc:
         raise _FetchFailed("network") from exc
     if len(payload) > _MAX_BYTES:
         raise _FetchFailed("too-large")
-    text = payload.decode("utf-8", errors="replace")
-    if len(text.encode("utf-8")) > _MAX_BYTES:
-        raise _FetchFailed("too-large")
+    try:
+        # Non-text bodies are refused, never replaced (§6.3 document_unavailable).
+        return payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise _FetchFailed("not-utf8") from exc
+
+
+def _idna(host: str) -> str | None:
+    """Lowercase ASCII (IDNA) form of a hostname, or None when it cannot encode."""
+    if not isinstance(host, str) or not host or "\x00" in host:
+        return None
+    try:
+        return host.encode("idna").decode("ascii").lower()
+    except (UnicodeError, UnicodeDecodeError):
+        return None
+
+
+def target_host(url: str) -> str | None:
+    """IDNA-normalized hostname of ``url`` without resolving anything."""
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        parsed.port  # raises ValueError on a bad port
+    except ValueError:
+        return None
+    return _idna(parsed.hostname) if parsed.hostname else None
+
+
+def safe_url_path(path: str) -> str | None:
+    """Normalized URL path, or None for escapes, separators or traversal.
+
+    Percent escapes, backslashes and NUL are refused outright, ``..`` segments are
+    refused, and empty/``.`` segments are collapsed, so an encoded or traversal
+    path can never be mistaken for a prefix outside the approved subtree.
+    """
+    if not path:
+        path = "/"
+    if not isinstance(path, str) or "%" in path or "\\" in path or "\x00" in path:
+        return None
+    segments: list[str] = []
+    for segment in path.split("/"):
+        if segment in ("", "."):
+            continue
+        if segment == "..":
+            return None
+        segments.append(segment)
+    return "/" + "/".join(segments)
+
+
+def host_allowed(url: str, allowed_hosts, path_prefixes=()) -> bool:
+    """Exact IDNA host match plus optional segment-boundary path prefixes.
+
+    No wildcards, no eTLD suffixes, no DNS: the official-doc allowlist decision
+    happens before any network use, so an off-domain URL is never fetched. A
+    malformed prefix entry, or a URL path carrying an escape or traversal, fails
+    closed instead of being ignored.
+    """
+    host = target_host(url)
+    if host is None:
+        return False
+    allowed = {normalized for normalized in (_idna(item) for item in (allowed_hosts or ())) if normalized}
+    if host not in allowed:
+        return False
+    prefixes = list(path_prefixes or ())
+    if not prefixes:
+        return True
+    path = safe_url_path(urllib.parse.urlsplit(url).path)
+    if path is None:
+        return False
+    bases: list[str] = []
+    for prefix in prefixes:
+        # Every entry is validated first: a malformed prefix fails the whole check
+        # instead of being silently dropped while a sibling entry matches.
+        if not isinstance(prefix, str) or not prefix.startswith("/"):
+            return False
+        base = safe_url_path(prefix)
+        if base is None or base == "/":
+            return False
+        bases.append(base)
+    return any(path == base or path.startswith(f"{base}/") for base in bases)
+
+
+def fetch_document(url: str, allowed_hosts, path_prefixes=()) -> str:
+    """Fetch one official document from the exact allowlisted host.
+
+    ``allowed_hosts`` is the policy host set (empty = nothing allowed); pass
+    ``None`` only where no commons allowlist exists (the local cache refresh).
+    Redirects, environment proxies and auth headers are refused, the body must be
+    valid UTF-8 and is capped at 1MiB/20s, and HTML documents are reduced to
+    visible text. The public-address DNS check is best effort and runs before the
+    connection; §A-12 removed the validated-IP pinning, so the hostname is
+    re-resolved by the stack.
+    """
+    if allowed_hosts is not None and not host_allowed(url, allowed_hosts, path_prefixes):
+        raise _FetchFailed("off_domain")
+    text = _fetch(url)
+    if _HTML_DOC_RE.match(text[:512].lstrip("\ufeff")):
+        return html_to_text(text)
     return text
 
 
@@ -167,7 +315,8 @@ def refresh_document(root: Path, service_id: str, url: str) -> dict:
 
     result = {"status": "failed", "service_id": service_id, "source_url": url, "changed": None}
     try:
-        text = _fetch(url)
+        # No commons policy in this local cache path: the note names one canonical URL.
+        text = fetch_document(url, None)
     except _FetchFailed as exc:
         result["error"] = exc.category
         return result

@@ -1,0 +1,138 @@
+{
+  "schema_version": 2,
+  "audience": "public",
+  "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "release": "fixture.shared",
+  "skills": [
+    {
+      "uri": "skill://gisul/commons/stable/example/SKILL.md",
+      "frontmatter": {
+        "name": "example",
+        "description": "stable example notes",
+        "grade": "stable",
+        "note_refs": [
+          {
+            "note_id": "service/anchor",
+            "revision": "sha256:d565d9a28966590a9bbe58157d64adec58fc0ff0dc75c15d3da418e468eb7a8b"
+          },
+          {
+            "note_id": "service/recalled",
+            "revision": "sha256:a766d47d1ec094bdfa1e5d3ea80c4b362017cc715cce147602ed5c2e8585e4ca"
+          }
+        ]
+      },
+      "resources": [
+        {
+          "uri": "skill://gisul/commons/stable/example/SKILL.md",
+          "digest": "sha256:b77a7b4567afddce36746a2c0704690ef08fd4958bc6de7e54fe6e4b610c0a77",
+          "size": 329
+        },
+        {
+          "uri": "skill://gisul/commons/stable/example/notes/anchor.md",
+          "digest": "sha256:53825fe72948d3e47aefb11202d0542ebf5a3ec9145011c99701e906b88fd4b5",
+          "size": 131
+        },
+        {
+          "uri": "skill://gisul/commons/stable/example/notes/recalled.md",
+          "digest": "sha256:fbfb6a0d55ba4dfc70a623f995a686b6558bbdd4b93308be73553e82ffe9131f",
+          "size": 135
+        }
+      ],
+      "grade": "stable",
+      "note_refs": [
+        {
+          "note_id": "service/anchor",
+          "revision": "sha256:d565d9a28966590a9bbe58157d64adec58fc0ff0dc75c15d3da418e468eb7a8b"
+        },
+        {
+          "note_id": "service/recalled",
+          "revision": "sha256:a766d47d1ec094bdfa1e5d3ea80c4b362017cc715cce147602ed5c2e8585e4ca"
+        }
+      ]
+    },
+    {
+      "uri": "skill://gisul/commons/trial/example/SKILL.md",
+      "frontmatter": {
+        "name": "example",
+        "description": "trial example notes",
+        "grade": "trial",
+        "note_refs": [
+          {
+            "note_id": "service/candidate",
+            "revision": "sha256:ea4673c4788dcd0ae7fbeab747ec479e17db27fccffa52f7654be89137c1cd83"
+          }
+        ]
+      },
+      "resources": [
+        {
+          "uri": "skill://gisul/commons/trial/example/SKILL.md",
+          "digest": "sha256:a6dd4b7c74d3a38f932a3bcf02b2be54aa647c798a5e13dbc44611c6b9b80da9",
+          "size": 213
+        },
+        {
+          "uri": "skill://gisul/commons/trial/example/notes/candidate.md",
+          "digest": "sha256:5c6cd9d1b1d90a0f8f818755d247725be943709350a73f62522352fbc5e4625b",
+          "size": 136
+        }
+      ],
+      "grade": "trial",
+      "note_refs": [
+        {
+          "note_id": "service/candidate",
+          "revision": "sha256:ea4673c4788dcd0ae7fbeab747ec479e17db27fccffa52f7654be89137c1cd83"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "stable/example/SKILL.md",
+      "digest": "sha256:b77a7b4567afddce36746a2c0704690ef08fd4958bc6de7e54fe6e4b610c0a77",
+      "size": 329,
+      "uri": "skill://gisul/commons/stable/example/SKILL.md"
+    },
+    {
+      "path": "stable/example/notes/anchor.md",
+      "digest": "sha256:53825fe72948d3e47aefb11202d0542ebf5a3ec9145011c99701e906b88fd4b5",
+      "size": 131,
+      "uri": "skill://gisul/commons/stable/example/notes/anchor.md"
+    },
+    {
+      "path": "stable/example/notes/recalled.md",
+      "digest": "sha256:fbfb6a0d55ba4dfc70a623f995a686b6558bbdd4b93308be73553e82ffe9131f",
+      "size": 135,
+      "uri": "skill://gisul/commons/stable/example/notes/recalled.md"
+    },
+    {
+      "path": "trial/example/SKILL.md",
+      "digest": "sha256:a6dd4b7c74d3a38f932a3bcf02b2be54aa647c798a5e13dbc44611c6b9b80da9",
+      "size": 213,
+      "uri": "skill://gisul/commons/trial/example/SKILL.md"
+    },
+    {
+      "path": "trial/example/notes/candidate.md",
+      "digest": "sha256:5c6cd9d1b1d90a0f8f818755d247725be943709350a73f62522352fbc5e4625b",
+      "size": 136,
+      "uri": "skill://gisul/commons/trial/example/notes/candidate.md"
+    },
+    {
+      "path": "note-index.json",
+      "digest": "sha256:2f744fbab9720f41f24d2956b9758a95375dca9c0ef9f4e26890fbfdd10973da",
+      "size": 1234
+    },
+    {
+      "path": "release.json",
+      "digest": "sha256:13fa325ad1faf21fa353f620888a5f9e7e133a9f2580f85d94c6f3e6e58f0e2e",
+      "size": 387
+    }
+  ],
+  "note_index": {
+    "path": "note-index.json",
+    "digest": "sha256:2f744fbab9720f41f24d2956b9758a95375dca9c0ef9f4e26890fbfdd10973da",
+    "size": 1234
+  },
+  "aliases": {
+    "skill://gisul/alias/stable/SKILL.md": "skill://gisul/commons/stable/example/SKILL.md",
+    "skill://gisul/alias/trial/SKILL.md": "skill://gisul/commons/trial/example/SKILL.md"
+  }
+}
