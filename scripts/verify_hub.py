@@ -262,7 +262,7 @@ class Hub:
         url = (origin or self.origin) + path
         if not url.startswith("https://"):
             raise Blocked("https-required")
-        headers = {"Authorization": "Bearer " + self.token(role), "Accept": "application/json"}
+        headers = {"Authorization": "Bearer " + self.token(role), "Accept": "application/json", "User-Agent": "portwright-hub/2.2"}
         data = raw if raw is not None else (json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None)
         if data is not None:
             headers["Content-Type"] = "application/json"
@@ -285,7 +285,7 @@ class Hub:
         url = (origin or self.origin) + path
         if not url.startswith("https://"):
             raise Blocked("https-required")
-        headers = {"Authorization": "Bearer " + self.token(role), "Accept": "application/json"}
+        headers = {"Authorization": "Bearer " + self.token(role), "Accept": "application/json", "User-Agent": "portwright-hub/2.2"}
         data = raw if raw is not None else None
         if data is not None:
             headers["Content-Type"] = "application/json"

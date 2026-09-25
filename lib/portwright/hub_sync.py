@@ -303,7 +303,7 @@ def _verified_notes(payload: dict, hub: str, trial: bool) -> list[dict]:
 
 
 def _get(url: str, token: str, trial: bool) -> dict:
-    request = Request(url + "/sync?include_trial=" + str(trial).lower(), headers={"Authorization": "Bearer " + token, "Accept": "application/json"})
+    request = Request(url + "/sync?include_trial=" + str(trial).lower(), headers={"Authorization": "Bearer " + token, "Accept": "application/json", "User-Agent": "portwright-hub/2.2"})
     with urlopen(request, timeout=20) as stream:
         if stream.geturl() != request.full_url:
             raise ValueError("Hub redirect refused")
