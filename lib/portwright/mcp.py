@@ -137,7 +137,7 @@ def _relay(root: Path, name: str, args: dict[str, Any]) -> dict[str, Any]:
     request = Request(settings["url"] + "/mcp", data=json.dumps(
         {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
          "params": {"name": name, "arguments": args}}, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + os.environ[settings["token_env"]]},
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + os.environ[settings["token_env"]], "User-Agent": "portwright-hub/2.2"},
         method="POST")
     try:
         with urlopen(request, timeout=20) as stream:

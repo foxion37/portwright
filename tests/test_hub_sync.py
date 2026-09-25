@@ -55,10 +55,15 @@ class HubTests(unittest.TestCase):
         self.current = response([entry()])
         self.next = None
         self.hits = []
+        self.require_hub_agent = False
         owner = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
+                if owner.require_hub_agent and self.headers.get("User-Agent") != "portwright-hub/2.2":
+                    self.send_response(403)
+                    self.end_headers()
+                    return
                 owner.hits.append((self.path, self.headers.get("Authorization")))
                 data = owner.next if len(owner.hits) % 2 == 0 and owner.next is not None else owner.current
                 if "include_trial=false" in self.path and any(note["grade"] == "trial" for note in data["notes"]):
@@ -72,6 +77,10 @@ class HubTests(unittest.TestCase):
                 self.wfile.write(body)
 
             def do_POST(self):
+                if owner.require_hub_agent and self.headers.get("User-Agent") != "portwright-hub/2.2":
+                    self.send_response(403)
+                    self.end_headers()
+                    return
                 owner.hits.append((self.path, self.headers.get("Authorization")))
                 request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 receipt = {"jsonrpc": "2.0", "id": request["id"], "result": {
@@ -659,6 +668,15 @@ class HubTests(unittest.TestCase):
         self.assertEqual(json.loads(self.mcp("report_failure", payload)["result"]["content"][0]["text"]),
                          {"error": "note_not_in_selected_hub"})
         sync(self.home, hub="company", include_trial=True)
+        with patch("portwright.mcp.urlopen", side_effect=self.local_open):
+            self.assertFalse(self.mcp("report_failure", payload)["result"]["isError"])
+
+    def test_sync_and_relay_use_hub_agent_accepted_by_edge(self):
+        self.require_hub_agent = True
+        note = entry()
+        self.sync()
+        payload = {"note_id": note["note_id"], "revision": note["revision"],
+                   "reason": "The documented command did not work"}
         with patch("portwright.mcp.urlopen", side_effect=self.local_open):
             self.assertFalse(self.mcp("report_failure", payload)["result"]["isError"])
 

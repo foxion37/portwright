@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-09-26
+### Fixed
+- Hub sync, local MCP relay, and live verifier now send a stable User-Agent. Cloudflare workers.dev returned error 1010 to Python's default User-Agent; authenticated sync was blocked before reaching the Worker.
+
 ## [2.2.0] - 2026-09-25
 ### Added
 - Public Hub Worker: scoped MCP lesson intake, D1 token lineage and budgets, immutable R2 releases, recall-aware reads, and operator administration.
@@ -141,3 +145,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [2.0.0]: https://github.com/foxion37/portwright/releases/tag/v2.0.0
 [2.1.0]: ../../releases/tag/v2.1.0
 [2.2.0]: ../../releases/tag/v2.2.0
+[2.2.1]: ../../releases/tag/v2.2.1
