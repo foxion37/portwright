@@ -1,14 +1,14 @@
 # FUTURE — portwright deferred layers (past v1)
 
-> The **north star**, not the current build. Active build = personal v1 (`README.md` / `HANDOFF.md`): Composio + fresh procedures, no gateway.
-> Everything here is **deferred**. Don't build it until v1 proves out and the need is real.
+> Layer A remains deferred. Layer B is partly approved: shared public Hub (M2) and separate company Hub (M3) are **planned**, not deployed by this document. See the [approved change request](CHANGE_REQUESTS.md).
+> Only the capabilities explicitly marked deferred below remain outside the approved milestones.
 >
 > 🌐 Korean copy: **`FUTURE_KR.md`**. Edits here must be mirrored there (CLAUDE.md "Bilingual file convention").
 
 ---
 
 ## Why these are deferred
-v1's purpose is minimize-user-intervention + minimize-agent-tool-use-cost. The two deferred layers below are different goals: **(A) a governance/safety gateway**, and **(B) org/multi-user scale**. Both were considered for v1 and cut — see ADR-0001/0002/0003 (all gateway-scoped, now FUTURE).
+The original personal v1 avoided a governance gateway and org-scale infrastructure. The approved hub-commons change now brings **content delivery to multiple users** into M2/M3 without changing the six purposes. Layer A's tool-call governance and the remaining Layer B capabilities stay deferred (ADR-0001/0002/0003 are gateway-scoped). Intake authentication and publication checks are not a gateway.
 
 ---
 
@@ -32,20 +32,21 @@ v1's purpose is minimize-user-intervention + minimize-agent-tool-use-cost. The t
 
 ---
 
-## Layer B — org / multi-user scale
+## Layer B — public then company Hub
 
-**What it is:** turning the personal tool into something deployable to beginners in an org (e.g. your own organization), with governance and compliance.
+**Approved sequence:** personal → invite-only public Hub (M2) → separate company Hub (M3) → possible published standard later. The public Hub is effectively a closed group because an Operator must issue an invite token. It validates shared delivery before the company deployment; M3 starts only after company cloud and repository rights are verified. See the [approved change request](CHANGE_REQUESTS.md).
 
-| Capability | Why deferred | Unlocks at |
-|------------|--------------|------------|
-| Multi-user governance + role allowlist | Solo v1 has one user | Internal-org stage |
-| Beginner deployment (URL + key handout) | No beginners yet | Internal-org stage |
-| PII masking | No regulated data flowing | Regulated stage |
-| Self-hosted Composio | Managed Composio is fine for personal; self-host removes the cloud from the credential path for data residency | Regulated stage |
-| "Moat" = accumulated failure memory across many users | A moat needs scale; solo = thin stream. v1 treats `failures/` as a personal lesson cache | Multi-user stage |
-| Publish `services/`+`failures/` schema as a standard | Validate the format in real use first | After internal-org stage |
+**M2 planned:** the public Hub's Worker authenticates intake and screens free text before D1 persistence; its one hourly, off-the-hour commons Actions workflow checks evidence, publishes the shared cache's canonical git copy, and delivers only `stable` by default (`trial` is opt-in). It never mediates external tool calls. The personal catalog remains isolated. Two distinct-lineage reports can recall a trial revision; stable recall requires Operator confirmation. GitHub Issue/PR free-text intake is not in M2.
 
-**Sequence:** personal → internal org → published standard. Each stage starts only after the previous works.
+**M3 planned:** the same Hub code is separately deployed for the company, with its own D1, release bucket, private commons, credentials, and company-issued invites. Public and company content do not fall back to each other. The two Hubs share a combined USD 20/month model-cost cap reserved before calls; Cloudflare and Actions are kept within free tiers.
+
+| Capability still deferred | Reason | Revisit when |
+|---------------------------|--------|--------------|
+| Gateway-enforced multi-user governance and role allowlists | Hub access scopes authenticate content delivery, not external tool calls | An enforced tool-call policy is actually needed |
+| Beginner-specific deployment beyond the approved Client/Hub path | The planned install and invite path has not been proven with beginners | Real users expose a gap |
+| PII masking of regulated data | No regulated data may flow through the planned submission path | A separately approved regulated stage |
+| Self-hosted Composio | Managed connection backends remain independent of the Hub | A regulated stage requires data residency |
+| Publish the `services/`+`failures/` schema as a standard | First validate shared use of the derive-on-miss cache | After the company stage |
 
 ---
 

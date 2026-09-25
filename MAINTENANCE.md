@@ -52,6 +52,13 @@ You don't hand-author procedures. On `DERIVE REQUIRED`, the Agent checks current
 - Personal identifiers are generalized by `substitutions` and then gated by regex `personal_markers`. Any surviving marker aborts the run before a single file is written. Adding a personal-looking string to a published doc is therefore a build failure, not a review item.
 - Verify an export by running its own suite inside the output tree (`cd build/public && python3 -m unittest discover -s tests -q`) and `./bin/portwright check`. Remove generated `__pycache__` before committing; the exported `.gitignore` already excludes it.
 
+## Improvement review (2026-09-22)
+- `bin/portwright review [--days 90] [--json] [--no-jev] [--no-write]` proposes what to fix next. It counts; it does not guess. Findings: a Procedure whose Lessons keep arriving (`procedure-defect`), repeated preflights with no Procedure (`cache-gap`), repeated `unknown` freshness on a note without `freshness_evidence.url` (`no-evidence`), a used note past 90 days (`stale`), and an active Lesson its Procedure never references (`unlinked-lesson`). Old failures that stopped are treated as fixed and are not reported.
+- The signal comes from two local sources. The note corpus includes `_private` roots, because those are the notes actually used here; only `_drafts` are ignored. The usage ledger `_local/usage.jsonl` gets one line per `preflight` with service id, profile id, freshness state, tier, intent, and Procedure path — never arguments, results, working directories, or credentials. `_local/` is gitignored and excluded from the public export; deleting it loses history but breaks nothing, and a truncated line is skipped rather than fatal.
+- JEV is optional and may only reorder findings through one request; it never adds, drops, or edits one. Without a credential the order stays deterministic and the report says so.
+- Reports are saved to `_local/reviews/<date>.md` unless `--no-write`, so a later session can see which proposals were acted on.
+- Reviewing is how private use drives public releases: the findings are the agenda for the next export, instead of a schedule nobody is motivated to keep.
+
 
 ## Failure modes
 - **Stale procedure slips through** → the user gets sent down a wrong path. Mitigation: verify-before-instruct is the rule, not an afterthought.

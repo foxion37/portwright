@@ -6,6 +6,8 @@
 
 ---
 
+Current v2.1.0 scope: anyone can clone and use the local CLI from an arbitrary path. A shared public Hub is planned for M2, and a separate company Hub for M3; neither is available yet. The v1 and 2.0.0 build orders below are historical decisions, not a solo-use restriction on the current local CLI. See [Roles and scope](docs/roles-and-scope.md).
+
 ## 0. Mission (v1)
 A personal layer that (1) connects each external tool once via a connection backend (Composio or native MCP/CLI) and remembers it, (2) makes sure any manual step an agent gives the user comes from the *current* procedure, never a stale path, and (3) caches the procedure/failure the agent hit so it succeeds first-try next time instead of re-paying the trial-and-error. No gateway. Operated by me + Claude Code, solo.
 

@@ -52,6 +52,13 @@
 - 개인 표식은 `substitutions`로 일반화한 뒤 정규식 `personal_markers`로 검사한다. 하나라도 남으면 파일을 한 개도 쓰지 않고 중단한다. 그래서 공개 문서에 개인 표식을 적는 일은 검토 대상이 아니라 빌드 실패다.
 - 검증은 산출물 안에서 자체 테스트를 돌려서 한다: `cd build/public && python3 -m unittest discover -s tests -q`, 그리고 `./bin/portwright check`. 커밋 전에 생성된 `__pycache__`는 지운다. 내보낸 `.gitignore`가 이미 제외하고 있다.
 
+## 개선 리뷰 (2026-09-22)
+- `bin/portwright review [--days 90] [--json] [--no-jev] [--no-write]`가 다음에 고칠 것을 제안한다. 추측하지 않고 센다. 항목은 교훈이 계속 쌓이는 절차(`procedure-defect`), 절차 없이 반복된 preflight(`cache-gap`), `freshness_evidence.url`이 없는 노트에 반복된 `unknown`(`no-evidence`), 90일 지났는데 계속 쓰이는 노트(`stale`), 절차가 참조하지 않는 활성 교훈(`unlinked-lesson`)이다. 예전에 반복됐지만 지금은 멈춘 실패는 고쳐진 것으로 보고 보고하지 않는다.
+- 신호는 로컬 두 곳에서 온다. 노트 집합은 `_private` 루트를 포함한다. 여기서 실제로 쓰는 노트가 그것들이기 때문이다. `_drafts`만 제외한다. 사용 장부 `_local/usage.jsonl`에는 `preflight` 한 번에 한 줄이 쌓이고, 서비스 id·프로파일 id·신선도·등급·intent·절차 경로만 적는다. 인자·결과·작업 디렉터리·자격증명은 적지 않는다. `_local/`은 gitignore되고 공개 내보내기에서도 제외된다. 지우면 기록만 사라지고 기능은 안 깨지며, 잘린 줄은 치명적 오류가 아니라 건너뛴다.
+- JEV는 선택이고 한 번의 요청으로 **순서만** 바꿀 수 있다. 항목을 추가·삭제·수정하지 않는다. 자격증명이 없으면 결정적 순서를 유지하고 보고서에 그렇게 적는다.
+- 보고서는 `--no-write`가 아니면 `_local/reviews/<날짜>.md`에 저장된다. 나중 세션이 어떤 제안을 실행했는지 볼 수 있다.
+- 개인 사용이 공개 릴리스를 미는 방식이 이것이다. 아무도 지킬 동기가 없는 일정 대신, 리뷰 결과가 다음 내보내기의 안건이 된다.
+
 
 ## 실패 모드
 - **낡은 절차가 새어나감** → 사용자가 틀린 경로로 감. 대응: verify-before-instruct를 사후가 아니라 규칙으로.

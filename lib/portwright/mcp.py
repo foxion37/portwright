@@ -10,13 +10,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .contracts import ContractCatalog, PACKAGE_ROOT
+from .contracts import ContractCatalog, note_location, resource_path
 from .jev import JevClient
-from .preflight import Preflight
+from .preflight import Preflight, run_preflight
 from .profiles import load_tier_rules
 
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
-NOTE_DIRS = ("services", "failures", "profiles")
 
 TOOLS = [
     {
@@ -37,7 +36,7 @@ TOOLS = [
     },
     {
         "name": "get_note",
-        "description": "Read one .md note under services/, failures/, or profiles/ (including _private and _drafts).",
+        "description": "Read one .md note under services/, failures/, or profiles/ (including _private and _hub; _drafts are check-only).",
         "inputSchema": {
             "type": "object",
             "properties": {"path": {"type": "string"}},
@@ -57,11 +56,8 @@ class _InvalidParams(Exception):
 
 
 def _version(root: Path) -> str:
-    for base in (root, PACKAGE_ROOT):
-        path = base / "VERSION"
-        if path.is_file():
-            return path.read_text(encoding="utf-8").strip()
-    return "unknown"
+    path = resource_path(root, "VERSION")
+    return path.read_text(encoding="utf-8").strip() if path.is_file() else "unknown"
 
 
 def _opt_str(args: dict[str, Any], key: str) -> str | None:
@@ -76,23 +72,10 @@ def _opt_str(args: dict[str, Any], key: str) -> str | None:
 def _note_path(root: Path, raw: Any) -> Path:
     if not isinstance(raw, str) or not raw:
         raise _InvalidParams("path must be a non-empty string")
-    if Path(raw).is_absolute() or ".." in Path(raw).parts or not raw.endswith(".md"):
-        raise ValueError("path must be a relative .md note under services/, failures/, or profiles/")
-    candidate = root / raw
-    parts = candidate.absolute().relative_to(root).parts
-    if parts[0] not in NOTE_DIRS:
-        raise ValueError("path must live under services/, failures/, or profiles/")
-    current = root
-    for part in parts:
-        current = current / part
-        if current.is_symlink():
-            raise ValueError("symlink notes are not allowed")
-    if not candidate.is_file():
-        raise ValueError("note not found")
-    return candidate
+    return ContractCatalog(root).note_path(raw)
 
 
-def _tool_preflight(preflight: Preflight, args: dict[str, Any]) -> dict[str, Any]:
+def _tool_preflight(root: Path, engine: Preflight, args: dict[str, Any]) -> dict[str, Any]:
     service = args.get("service")
     if not isinstance(service, str) or not service:
         raise _InvalidParams("service is required")
@@ -100,26 +83,33 @@ def _tool_preflight(preflight: Preflight, args: dict[str, Any]) -> dict[str, Any
     if intent not in ("call", "instruct", "recover"):
         raise _InvalidParams("intent must be call, instruct, or recover")
     cwd = _opt_str(args, "cwd")
-    return preflight.resolve(
+    return run_preflight(
+        root,
         service,
         intent,
         cwd=Path(cwd) if cwd else None,
         profile_id=_opt_str(args, "profile"),
         evidence_version=_opt_str(args, "evidence_version"),
         evidence_fetched_at=_opt_str(args, "evidence_fetched_at"),
+        engine=engine,
     ).to_dict()
 
 
 def _tool_status(root: Path) -> dict[str, Any]:
-    notes = {"services": 0, "failures": 0, "profiles": 0, "private": 0, "drafts": 0}
+    notes = {"services": 0, "failures": 0, "profiles": 0, "private": 0, "hub": 0, "drafts": 0}
     for path in ContractCatalog(root).iter_notes():
-        parts = path.absolute().relative_to(root).parts
-        if "_private" in parts:
-            notes["private"] += 1
-        elif "_drafts" in parts:
+        location = note_location(path.relative_to(root))
+        if location is None:
+            continue
+        kind, source = location
+        if source == "tracked":
+            notes[f"{kind}s"] += 1
+        elif source == "profile":
+            notes["profiles"] += 1
+        elif source == "draft":
             notes["drafts"] += 1
         else:
-            notes[parts[0]] += 1
+            notes[source] += 1
     return {
         "version": _version(root),
         "root_name": root.name,
@@ -151,7 +141,7 @@ def serve(root: Path, *, stdin=None, stdout=None) -> None:
     root = Path(root).resolve()
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
-    preflight = Preflight(root)
+    engine = Preflight(root)
 
     def handle(request: dict[str, Any]) -> dict[str, Any] | None:
         request_id = request.get("id")
@@ -178,7 +168,7 @@ def serve(root: Path, *, stdin=None, stdout=None) -> None:
                     raise _InvalidParams("name and arguments are required")
                 try:
                     if name == "preflight":
-                        payload = _tool_preflight(preflight, args)
+                        payload = _tool_preflight(root, engine, args)
                     elif name == "get_note":
                         path = _note_path(root, args.get("path"))
                         payload = {"path": path.relative_to(root).as_posix(), "text": path.read_text(encoding="utf-8")}

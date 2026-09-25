@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
-from .contracts import ContractCatalog
+from .contracts import ContractCatalog, is_distributable, note_location
 from .doc_cache import refresh_document
 
 
@@ -44,13 +44,9 @@ def _paths(root: Path, *args: str) -> set[str]:
     return set(_git(root, *args).split("\0")) - {""}
 
 
-def _is_note(path: str) -> bool:
-    parts = Path(path).parts
-    return (
-        len(parts) >= 2 and parts[0] in {"services", "failures"}
-        and path.endswith(".md") and parts[-1] != "_TEMPLATE.md"
-        and "_drafts" not in parts and "_private" not in parts
-    )
+def _is_tracked_note(path: str) -> bool:
+    location = note_location(path)
+    return location is not None and location[1] == "tracked"
 
 
 def run_update(root: Path, *, dry_run: bool) -> UpdateReport:
@@ -85,12 +81,12 @@ def run_update(root: Path, *, dry_run: bool) -> UpdateReport:
                    or incoming.startswith(path + "/") for incoming in changed)
         )
 
-    notes_pulled = sum(_is_note(path) for path in changed) if dry_run else 0
+    notes_pulled = sum(_is_tracked_note(path) for path in changed) if dry_run else 0
     if not dry_run and fetched and not conflicts:
         # Pull the inspected snapshot, not a second fetch of a moving upstream.
         _git(root, "pull", "--ff-only", "--no-rebase", "--no-autostash", ".", target)
         notes_pulled = sum(
-            _is_note(path)
+            _is_tracked_note(path)
             for path in _paths(root, "diff", "--name-only", "--no-renames", "-z", before, "HEAD")
         )
         current_version = (root / "VERSION").read_text(encoding="utf-8").strip()
@@ -99,7 +95,7 @@ def run_update(root: Path, *, dry_run: bool) -> UpdateReport:
     private_excluded = sorted(
         path.relative_to(root).as_posix()
         for path in catalog.iter_notes()
-        if "_private" in path.relative_to(root).parts
+        if (location := note_location(path.relative_to(root))) and location[1] == "private"
     )
     unclassified: list[str] = []
     stale_candidates = revalidated = 0
@@ -109,11 +105,11 @@ def run_update(root: Path, *, dry_run: bool) -> UpdateReport:
     docs_changed: list[str] = []
     docs_failed: list[str] = []
     docs_unconfigured: list[str] = []
-    for relative in sorted(_paths(root, "ls-files", "-z", "--", "services", "failures")):
-        if not _is_note(relative):
+    tracked_paths = _paths(root, "ls-files", "-z", "--", "services", "failures")
+    for note in catalog.notes(sources=("tracked",)):
+        relative = note.relative_path
+        if relative not in tracked_paths:
             continue
-        note = catalog.validate_note(root / relative)
-        # Both parser generations (bool and string scalars) count as classified.
         if note.data.get("distributable") is None:
             unclassified.append(relative)
         try:
@@ -127,7 +123,7 @@ def run_update(root: Path, *, dry_run: bool) -> UpdateReport:
             continue
         source = note.data.get("freshness_evidence")
         url = source.get("url") if isinstance(source, dict) else None
-        if not note.ok or note.data.get("distributable") is not True or not isinstance(url, str) or not url:
+        if not is_distributable(note) or not isinstance(url, str) or not url:
             docs_unconfigured.append(relative)
             continue
         service_id = note.data["id"]

@@ -9,17 +9,15 @@ from pathlib import Path
 
 from .browser import select_menu
 from .clients import CLIENTS, ClientManager
-from .contracts import ContractCatalog, PACKAGE_ROOT, render_report
+from .contracts import ContractCatalog, PACKAGE_ROOT, render_report, resource_path
 from .jev import JevClient
 from .memory import MemoryLifecycle
-from .preflight import Preflight, render_decision
-
-
-DEFAULT_HOME = Path.home() / "developer" / "tools" / "portwright"
+from .preflight import render_decision, run_preflight
+from .review import Ledger, collect, prioritize, render, write_report
 
 
 def _root(value: str | None) -> Path:
-    return Path(value or os.environ.get("PORTWRIGHT_HOME", DEFAULT_HOME)).expanduser().resolve()
+    return Path(value or os.environ.get("PORTWRIGHT_HOME") or PACKAGE_ROOT).expanduser().resolve()
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -53,6 +51,13 @@ def _parser() -> argparse.ArgumentParser:
     update.add_argument("--dry-run", action="store_true")
     update.add_argument("--json", action="store_true")
     update.add_argument("--home")
+
+    review = sub.add_parser("review", help="Propose improvements from repeated failures and repeated questions")
+    review.add_argument("--days", type=int, default=90)
+    review.add_argument("--no-jev", action="store_true", help="Skip the optional reordering judgment")
+    review.add_argument("--no-write", action="store_true", help="Print only; do not save a report")
+    review.add_argument("--json", action="store_true")
+    review.add_argument("--home")
 
     memory = sub.add_parser("memory", help="Create, review, or promote safe memory drafts")
     memory_sub = memory.add_subparsers(dest="memory_command", required=True)
@@ -108,8 +113,7 @@ def _check(args: argparse.Namespace) -> int:
 
 
 def _routing_path(root: Path) -> Path:
-    local = root / "install" / "model-routing.json"
-    return local if local.is_file() else PACKAGE_ROOT / "install" / "model-routing.json"
+    return resource_path(root, "install/model-routing.json")
 
 
 def _models(args: argparse.Namespace) -> int:
@@ -141,7 +145,8 @@ def _skills(args: argparse.Namespace) -> int:
 
 def _preflight(args: argparse.Namespace) -> int:
     evidence_text = Path(args.evidence_file).read_text(encoding="utf-8") if args.evidence_file else None
-    decision = Preflight(_root(args.home)).resolve(
+    decision = run_preflight(
+        _root(args.home),
         args.service,
         args.intent,
         cwd=Path(args.cwd).expanduser() if args.cwd else None,
@@ -151,6 +156,24 @@ def _preflight(args: argparse.Namespace) -> int:
         evidence_text=evidence_text,
     )
     print(json.dumps(decision.to_dict(), ensure_ascii=False, indent=2) if args.json else render_decision(decision))
+    return 0
+
+
+def _review(args: argparse.Namespace) -> int:
+    root = _root(args.home)
+    findings = collect(root, days=args.days)
+    jev = None if args.no_jev else JevClient.from_env()
+    findings, order = prioritize(findings, jev)
+    rows = len(Ledger(root).entries(args.days))
+    text = render(findings, days=args.days, ledger_rows=rows, order=order)
+    if args.json:
+        print(json.dumps({"days": args.days, "ledger_rows": rows, "order": order,
+                          "findings": [finding.to_dict() for finding in findings]}, ensure_ascii=False, indent=2))
+    else:
+        print(text)
+    if not args.no_write:
+        path = write_report(root, text)
+        print(f"saved: {path.relative_to(root)}")
     return 0
 
 
@@ -269,6 +292,8 @@ def main(argv: list[str] | None = None) -> int:
             return _browser(args)
         if args.command == "update":
             return _update(args)
+        if args.command == "review":
+            return _review(args)
         if args.command == "mcp":
             from .mcp import serve
 

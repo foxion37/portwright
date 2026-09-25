@@ -1,22 +1,46 @@
 # portwright
 
-개인용 도구사용 지식 레이어 — 사용자 셋업 단계도, 에이전트 도구사용 실패도 줄인다(v1) — 의 도메인 용어집. 정식 용어는 영어(코드·문서 기준), 정의는 한국어. 구현 세부사항이 아니라 *말의 뜻*만 담는다.
+도구사용 지식 레이어의 도메인 용어집. 사용자 셋업 단계와 에이전트 도구사용 실패를 줄이는 여섯 목적은 그대로다. 개인용 로컬 기능에 더해 공유 Hub는 M2·M3에서 계획한다. 정식 용어는 영어(코드·문서 기준), 정의는 한국어. 구현 세부사항이 아니라 *말의 뜻*만 담는다.
 
 > 이 파일은 **단일 파일**로 유지한다(EN/KR 분리 안 함). glossary는 자주 바뀌어 두 벌로 쪼개면 어긋나기 쉽다.
 
 ## Language
 
 **User (사용자)**:
-행동의 주인인 *사람*. v1에선 나 하나. `allowlist`가 governs하는 주어.
-_쓰지 말 것_: operator(운영자와 혼동), account
+portwright를 **Client**의 **Agent**를 통해 사용하는 *사람*. 외부 개발자, 회사 동료, 비개발자를 모두 포함한다. 사람만 할 수 있는 단계는 직접 수행한다. **Operator**와 **회사 관리자**도 서비스를 사용할 때는 User다.
+_쓰지 말 것_: operator(운영 권한과 사용자라는 지위를 혼동), account
 
 **Client (클라이언트)**:
-게이트웨이에 붙는 *앱*. Claude Code · Cursor · ChatGPT 등 MCP 클라이언트.
+**Client**는 Agent를 실행하는 *앱*. Claude Code · Cursor · ChatGPT 같은 MCP 클라이언트를 포함한다.
 _쓰지 말 것_: agent(앱을 에이전트라 부르지 말 것)
 
 **Agent (에이전트)**:
-**Client** 안에서 돌며 *도구 호출을 결정하는 AI*(예: Claude 모델). `policy` 단계가 gate하는 건 Agent의 호출. `agent_can`은 Agent의 능력 목록.
+**Client** 안에서 돌며 *도구 호출을 결정하는 AI*(예: Claude 모델). `agent_can`은 Agent의 능력 목록이다. 외부 도구 호출의 허용 여부는 Client 자체 권한이 결정하며 portwright는 조언만 한다.
 _쓰지 말 것_: client, bot
+
+**Operator (운영자)** *(공개 Hub: M2 계획)*:
+공개 **Hub**의 초대 토큰을 발급하고 **Grade**의 `stable` 승격을 검토하며 `stable` **Recall**을 확인하는 사람. 회사 초대 토큰은 회사 관리자가 발급한다. 운영자는 외부 도구 호출을 통제하는 게이트웨이가 아니다.
+_쓰지 말 것_: User(모든 사용자가 운영자인 것은 아님), Agent
+
+**Hub (허브)** *(공개 M2·회사 M3 계획)*:
+personal, public, company 중 한 대상에게 지식을 배달하는 격리된 서비스. 공유 Hub마다 Worker 한 개, 접수용 D1 한 개, 배달 버킷 한 개와 **Commons**의 Actions workflow 한 개를 쓴다. personal은 소유자의 기존 개인 배달을 유지한다. 공개·회사 Hub는 자격증명과 콘텐츠를 공유하거나 서로 대체 조회하지 않는다.
+_쓰지 말 것_: Gateway(외부 도구 호출을 중계·강제하지 않음), 여러 대상이 섞인 단일 저장소
+
+**Commons (공유 캐시의 git 정본 사본)** *(M2·M3 계획)*:
+한 공유 **Hub**의 Procedure/Lesson 본문, **Grade**, **Recall** 표식을 담는 비공개 git 저장소. 한 대상의 공유 캐시를 보관할 뿐 미리 채운 등록소가 아니다. 중앙에 없거나 낡은 절차도 공식 문서에서 도출해 캐시한다(ADR-0004 유지). 회사 Hub는 별도 Commons를 쓴다.
+_쓰지 말 것_: registry, DB가 노트 본문의 또 다른 정본
+
+**Grade (노트 등급)** *(M2 계획)*:
+공유 노트의 `trial|stable` 상태. `trial`은 게시 검사를 통과해도 명시적으로 요청할 때만 제공하고, `stable`만 기본 조회·preflight·번들에 들어간다. 서로 다른 초대 토큰 계보 세 건이 revision을 확인하고 **Operator**가 검토해야 stable이 된다.
+_쓰지 말 것_: Tier(도구 호출의 조언용 자율성 등급), trial을 기본 주입
+
+**Invite token (초대 토큰)** *(M2·M3 계획)*:
+공개 **Hub**에서는 **Operator**가, 회사 **Hub**에서는 회사 관리자가 발급하는 접속 자격. 서버에는 해시, 조직, 권한(`read|submit|operator`), 만료, 비식별 발급 계보만 저장한다. 재발급은 독립적인 확인표를 늘리지 않는다. 이름·이메일·IP는 저장하지 않는다.
+_쓰지 말 것_: 외부 서비스의 API 키, 사람 수와 동일한 토큰 수
+
+**Recall (회수)** *(M2 계획)*:
+**Commons**의 `note_id + revision digest` 표식으로 특정 revision의 배달을 중단하는 일. 현재·옛 릴리스 pin 조회에서 막고 로컬 캐시는 동기화 시 반영한다. 서로 다른 두 계보의 신고로 `trial`을 회수하고, `stable` 회수에는 **Operator**의 확인이 필요하다. 모델 예산과 무관하게 동작한다.
+_쓰지 말 것_: git revert만으로 옛 릴리스나 오프라인 캐시까지 즉시 회수했다는 뜻
 
 **Needless delegation (불필요한 위임)**:
 **Agent**가 *스스로 할 수 있는 일*을 **User**에게 시키는 것. **portwright가 막으려는 핵심 안티패턴.** ("사람 손 많이 = 안 좋은 제품"의 정체.)
@@ -47,11 +71,11 @@ _쓰지 말 것_: registry, 등록소, 라이브러리
 _쓰지 말 것_: connection(= frontmatter 전송 필드와 혼동 → 그건 **Endpoint**)
 
 **Endpoint (엔드포인트)**:
-게이트웨이가 한 **Service**의 MCP에 닿는 *전송 주소*(`type`, `server`). frontmatter 필드명도 `endpoint:`.
+한 **Service**의 MCP 전송 주소(`type`, `server`). frontmatter 필드명도 `endpoint:`이며, 공유 **Hub**가 외부 도구 호출을 중계한다는 뜻은 아니다.
 _쓰지 말 것_: connection
 
 **Verify-before-instruct (지시 전 확인)**:
-v1의 핵심 메커니즘(IP). **Agent**가 **사람 몫**을 **User**에게 시키기 *직전에* 발동 — 그 순간 현재 공식 문서에서 경로를 도출해 *항상 최신*으로 안내한다. **에이전트 자기 호출**은 캐시된 절차/교훈을 먼저 읽어 재실패를 막는다(캐시 제공 대상). 한 줄: **사람 단계 = 지시 직전 도출; 에이전트 자기 호출 = 캐시된 절차/교훈 먼저 읽어 재실패 방지.**
+v1의 핵심 메커니즘(IP). **Agent**가 **사람 몫**을 **User**에게 시키기 *직전에* 현재 공식 문서에서 경로를 도출한다. **에이전트 자기 호출**은 캐시된 절차와 교훈을 먼저 읽어 재실패를 막는다.
 _쓰지 말 것_: validation(코드 검증과 혼동)
 
 **Verified (검증됨)** *(v1: 정보용 스탬프 / 자동추적은 FUTURE)*:
@@ -118,6 +142,9 @@ TypeSafe Jev (https://docs.typesafe.ai/introduction). 텍스트를 생성하지 
 - 하나 이상의 **Failure**(감사로그 사건)가 하나의 **Lesson**(`failures/` 항목)을 낳는다.
 - 한 **Service**는 하나의 **Procedure**(`services/<id>.md`)를 가진다. **Lesson**은 보통 한 **Service**의 **Procedure**에 한 줄로 반영된다.
 - 한 **User**가 여러 **Client**를 쓴다. 각 **Client** 안에서 한 **Agent**가 돈다.
+- 여러 **User**가 각자의 **Client**와 **Agent**로 personal 또는 초대받은 **Hub**의 Procedure/Lesson을 읽는다. **Operator**와 회사 관리자는 각 Hub의 초대 토큰을 발급한다.
+- 공유 **Hub**의 **Commons**가 노트 본문·**Grade**·**Recall** 표식의 git 정본 사본이고, D1은 접수·revision별 확인/신고·토큰 해시/계보·비용을 맡는다. 공유 캐시에 없거나 낡은 Procedure도 ADR-0004의 도출·캐시 경로를 따른다.
+- 로컬 조회는 `_private` → 추적 → `_hub` 순서다. **Grade** `trial`은 명시 조회만, `stable`은 기본 조회에 포함한다. 공개·회사 **Hub** 간 대체 조회는 없다.
 - 한 **Service**의 **Procedure**는 **에이전트 몫**과 **사람 몫**으로 갈린다. **Agent**는 에이전트 몫을 *스스로* 하고, 사람 몫만 **User**에게 — 그것도 최신 경로로 — 요청한다.
 - 에이전트 몫을 User에게 시키면 그게 **불필요한 위임**(막을 대상)이다.
 
@@ -132,7 +159,7 @@ TypeSafe Jev (https://docs.typesafe.ai/introduction). 텍스트를 생성하지 
 - "service"가 *외부 시스템*과 *기록 파일* 둘 다 → 해결: 외부 = **Service**, 기록 = **Procedure**. 폴더명 `services/` 유지.
 - "agent"가 *AI*와 *앱*(Cursor 등) 둘 다 → 해결: 앱 = **Client**, AI = **Agent**. (`FUTURE.md`의 "beginner agents" 문구 = **Client**로 수정)
 - "connection"이 *인가된 링크*와 *frontmatter 전송 필드* 둘 다 → 해결: 링크 = **Connection**, 필드 = **Endpoint**(필드명 `endpoint:`로 개명).
-- "operator"가 *게이트웨이 운영자*와 *FUTURE 역할명* 둘 다 → 해결: v1엔 운영자를 별도 용어로 두지 않고 **User**로 흡수. `operator` 역할명은 `FUTURE.md` 영역이며 부활 시 다른 이름 검토.
+- "operator"가 *운영 권한*과 *일반 사용자*로 섞임 → 해결: **Operator**는 공개 Hub의 토큰 발급·stable 검토·stable 회수 확인 역할이고, **User**는 portwright를 쓰는 모든 사람이다. 회사 토큰 발급은 회사 관리자가 맡는다.
 - "verified"가 *절차 전체 확인*으로 오해됨 → 해결: **Connection 신선도**만 뜻함(자동). Procedure 정확성은 **Lesson**이 담당.
 - `services/`가 원래 뼈대에서 "registry/등록소(미리 채움)"로 정의됐으나 "모든 도구 적용"과 충돌 → 해결: **Procedure cache(도출-온-미스)**. 폴더 유지, 미리 안 채움. "registry/등록소"는 버린다.
 - "Procedure가 설정 절차냐 사용 절차냐"가 흐릿 → 해결: 그 축이 틀렸다. 기준은 *누가 할 수 있나* = **에이전트 몫** vs **사람 몫**. 사용(배포 등)은 에이전트 몫이라 절차가 아님. 핵심은 에이전트 몫을 사람에게 떠넘기는 **불필요한 위임**을 막는 것.

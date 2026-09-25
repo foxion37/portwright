@@ -5,11 +5,10 @@ description: Use before connecting, authenticating, instructing setup for, or ca
 
 # Portwright Tool Use
 
-Global preflight for external tools. Default Portwright root:
-
-`~/developer/tools/portwright`
-
-If the repo is installed elsewhere, use that repo path instead.
+The managed block installed by Portwright contains the executable path for
+this clone. Use that path for the commands below; `<portwright>` denotes the
+directory where this repository was cloned. If a separate content home is
+configured, keep the `--home` flag shown in the managed block.
 
 Use when: before connecting, authenticating, troubleshooting, or calling any external tool.
 
@@ -18,7 +17,7 @@ Use when: before connecting, authenticating, troubleshooting, or calling any ext
 Before using or instructing any external tool, resolve Portwright memory first:
 
 ```bash
-~/developer/tools/portwright/bin/portwright preflight <service-id>
+<portwright>/bin/portwright preflight <service-id>
 ```
 
 The command resolves the Profile for the current directory (GitHub account, env
@@ -33,7 +32,7 @@ every step is still correct.
 Before delegating or escalating, read the routing table once per session:
 
 ```bash
-~/developer/tools/portwright/bin/portwright models
+<portwright>/bin/portwright models
 ```
 
 It maps task classes to a neutral capability tier and effort (`modelchk` scale)
@@ -46,8 +45,8 @@ cache. The harness binds tiers to concrete models; do not hard-code vendors.
 To load the version-matched guides without copying files:
 
 ```bash
-~/developer/tools/portwright/bin/portwright skills get portwright-tool-use
-~/developer/tools/portwright/bin/portwright skills get portwright-tool-memory
+<portwright>/bin/portwright skills get portwright-tool-use
+<portwright>/bin/portwright skills get portwright-tool-memory
 ```
 
 ## User Burden
@@ -60,7 +59,7 @@ Ask only for genuinely human-only steps:
 - account login / identity proof
 - ToS or permission approval
 
-If a human step is needed, run `~/developer/tools/portwright/bin/portwright preflight <service-id> --intent instruct`,
+If a human step is needed, run `<portwright>/bin/portwright preflight <service-id> --intent instruct`,
 then derive the current path from official docs before instructing the User.
 
 ## Unknown Or Broken Tool
@@ -69,15 +68,15 @@ If no `services/<id>.md` exists:
 
 1. Treat `DERIVE REQUIRED` as the normal derive-on-miss state.
 2. Derive from current official docs before instructing the User.
-3. Create a Procedure draft with `~/developer/tools/portwright/bin/portwright memory draft procedure <service-id>`.
+3. Create a Procedure draft with `<portwright>/bin/portwright memory draft procedure <service-id>`.
 
 If the tool is failing:
 
 1. Stop trial-and-error.
-2. Run `~/developer/tools/portwright/bin/portwright preflight <service-id> --intent recover`.
+2. Run `<portwright>/bin/portwright preflight <service-id> --intent recover`.
 3. Try the returned cached correction.
 4. After a confirmed new fix, create a Lesson draft with
-   `~/developer/tools/portwright/bin/portwright memory draft lesson <service-id> <slug>`.
+   `<portwright>/bin/portwright memory draft lesson <service-id> <slug>`.
 
 ## Boundary
 

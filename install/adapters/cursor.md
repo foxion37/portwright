@@ -3,10 +3,12 @@
 Cursor stores global User Rules inside the application, not in a documented
 user-level file. This is the one Client adapter that requires a human-only step.
 
+`<portwright>` is the directory where you cloned this repository; the installed managed block uses that path.
+
 ## Prepare install
 
 ```sh
-~/developer/tools/portwright/bin/portwright client install cursor
+<portwright>/bin/portwright client install cursor
 ```
 
 The command prints a ready-to-paste block with the current Portwright path.
@@ -22,7 +24,7 @@ The managed block uses these markers:
 ## Verify
 
 ```sh
-~/developer/tools/portwright/bin/portwright client doctor cursor
+<portwright>/bin/portwright client doctor cursor
 ```
 
 The CLI reports `MANUAL` because Cursor does not expose User Rules as a file.

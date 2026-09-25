@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "lib"))
 from portwright.jev import JevClient
 from portwright.memory import SECRET_PATTERNS
 from publish_release import validated_inventory
+from build_skill_bundles import identifier_hits
 
 THRESHOLD = 0.5
 MAX_MODEL_BYTES = 24_000
@@ -57,6 +58,12 @@ def main(argv: list[str]) -> int:
         files = [{"path": f["path"], "text": (out / f["path"]).read_text(encoding="utf-8")} for f in entry["files"]]
         if any(pattern.search(item["text"]) for item in files for pattern in SECRET_PATTERNS):
             print(f"{skill_id}: blocked by local secret screen")
+            failed += 1
+            continue
+        if not (entry.get("personal") or entry["path"].startswith("personal/")) and any(
+            identifier_hits(item["text"]) for item in files
+        ):
+            print(f"{skill_id}: blocked by local identifier screen")
             failed += 1
             continue
         if entry.get("personal") or entry["path"].startswith("personal/"):

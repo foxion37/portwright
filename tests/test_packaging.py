@@ -230,37 +230,6 @@ class SkillsPackagingTests(unittest.TestCase):
         )
 
 
-class CanonicalPathPackagingTests(unittest.TestCase):
-    def test_install_surfaces_use_tools_canonical_path(self) -> None:
-        files = (
-            ROOT / "bin" / "portwright",
-            ROOT / "install" / "README.md",
-            ROOT / "install" / "adapters" / "claude-code.md",
-            ROOT / "install" / "adapters" / "codex.md",
-            ROOT / "install" / "adapters" / "cursor.md",
-            ROOT / "install" / "adapters" / "gemini-cli.md",
-            ROOT / "install" / "adapters" / "hermes.md",
-            ROOT / "install" / "portwright-reminder.sh",
-            ROOT / "install" / "snippets" / "portwright.block.md",
-            ROOT / "skills" / "portwright-tool-use" / "SKILL.md",
-            ROOT / "skills" / "portwright-tool-memory" / "SKILL.md",
-        )
-
-        combined = "\n".join(read_text(path) for path in files)
-        old_home = "developer/" + "projects/portwright"
-        canonical_home = "developer/" + "tools/portwright"
-        self.assertNotIn(
-            old_home,
-            combined,
-            "Packaged install surfaces should not point at the old projects path.",
-        )
-        self.assertIn(
-            canonical_home,
-            combined,
-            "Packaged install surfaces should point at the canonical tools path.",
-        )
-
-
 class RepoContractPackagingTests(unittest.TestCase):
     def test_memory_templates_match_v1_frontmatter_contract(self) -> None:
         memory_policy = read_text(
@@ -360,16 +329,6 @@ class SchemaLintParityTests(unittest.TestCase):
 
 
 class AdapterPackagingTests(unittest.TestCase):
-    ADAPTERS = (
-        "claude-code",
-        "codex",
-        "cursor",
-        "gemini-cli",
-        "hermes",
-        "oh-my-pi",
-        "opencode",
-        "vscode",
-    )
     # claude-code wires a hook instead of a pasted block, so every other
     # adapter must document the portwright:start managed-block marker.
     MARKER_ADAPTERS = (
@@ -381,19 +340,6 @@ class AdapterPackagingTests(unittest.TestCase):
         "opencode",
         "vscode",
     )
-
-    def test_all_adapters_exist_and_use_canonical_path(self) -> None:
-        canonical_home = "developer/" + "tools/portwright"
-        for name in self.ADAPTERS:
-            path = ROOT / "install" / "adapters" / f"{name}.md"
-            with self.subTest(adapter=name):
-                self.assertTrue(path.is_file(), f"Missing packaged adapter: {path}")
-                self.assertIn(
-                    canonical_home,
-                    read_text(path),
-                    f"install/adapters/{name}.md should use the canonical "
-                    "tools path.",
-                )
 
     def test_managed_block_adapters_document_start_marker(self) -> None:
         for name in self.MARKER_ADAPTERS:
@@ -439,6 +385,7 @@ class LintStrictContractTests(unittest.TestCase):
                 "agent_can:",
                 "  - everything",
                 "status: stale",
+                "distributable: true",
                 "---",
                 "## 한 줄 요약",
                 "test",

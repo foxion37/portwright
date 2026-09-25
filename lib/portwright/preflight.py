@@ -9,6 +9,7 @@ from .contracts import ContractCatalog, PACKAGE_ROOT, SERVICE_ID_RE
 from .doc_cache import load_document
 from .jev import JevBatch, JevClient
 from .profiles import ProfileRouter, assess_freshness, decide_tier, load_tier_rules
+from .review import Ledger
 
 
 Intent = Literal["call", "instruct", "recover"]
@@ -60,20 +61,15 @@ class Preflight:
         procedure: str | None = None
         procedure_data: dict[str, Any] | None = None
         procedure_text: str | None = None
-        invalid: list[str] = []
-        for candidate in (
-            self.root / "services" / f"{service_id}.md",
-            self.root / "services" / "_private" / f"{service_id}.md",
-        ):
-            if not candidate.is_file():
-                continue
-            result = self.catalog.validate_note(candidate)
-            procedure = candidate.relative_to(self.root).as_posix()
+        invalid = [note.relative_path for note in self.catalog.directory_issues(include_drafts=False)
+                   if note.kind in {"service", "failure"}]
+        result = self.catalog.lookup("service", service_id)
+        if result is not None:
+            procedure = result.relative_path
             procedure_data = result.data or None
             procedure_text = "\n".join(result.body) if result.body else None
             if not result.ok:
                 invalid.append(procedure)
-            break
         cached_evidence: dict[str, Any] | None = None
         source = (procedure_data or {}).get("freshness_evidence")
         if (
@@ -104,29 +100,20 @@ class Preflight:
 
         active: list[str] = []
         stale: list[str] = []
-        for failures_dir in (self.root / "failures", self.root / "failures" / "_private"):
-            if failures_dir.is_symlink():
-                invalid.append(failures_dir.relative_to(self.root).as_posix())
+        for result in self.catalog.notes("failure"):
+            if result.data.get("service") != service_id:
                 continue
-            if not failures_dir.is_dir():
+            lesson_profile = result.data.get("profile_id")
+            if lesson_profile and (profile is None or lesson_profile != profile.id):
                 continue
-            for path in sorted(failures_dir.glob("*.md")):
-                if path.name == "_TEMPLATE.md":
-                    continue
-                result = self.catalog.validate_note(path)
-                if result.data.get("service") != service_id:
-                    continue
-                lesson_profile = result.data.get("profile_id")
-                if lesson_profile and (profile is None or lesson_profile != profile.id):
-                    continue
-                relative = path.relative_to(self.root).as_posix()
-                if not result.ok:
-                    invalid.append(relative)
-                    continue
-                if result.data.get("status") == "stale":
-                    stale.append(relative)
-                else:
-                    active.append(relative)
+            relative = result.relative_path
+            if not result.ok:
+                invalid.append(relative)
+                continue
+            if result.data.get("status") == "stale":
+                stale.append(relative)
+            else:
+                active.append(relative)
 
 
         freshness = assess_freshness(
@@ -184,6 +171,45 @@ class Preflight:
             tier=tier.tier,
             rationale={"profile": resolution.rationale, "freshness": freshness.rationale, "tier": tier.rationale},
         )
+
+
+def run_preflight(
+    root: Path,
+    service_id: str,
+    intent: Intent = "call",
+    *,
+    cwd: Path | None = None,
+    profile_id: str | None = None,
+    evidence_version: str | None = None,
+    evidence_fetched_at: str | None = None,
+    evidence_text: str | None = None,
+    jev: JevClient | None = None,
+    engine: Preflight | None = None,
+) -> PreflightDecision:
+    """The one preflight operation: resolve the decision, then record the ledger row.
+
+    Every surface (CLI, MCP) calls this, so the ledger never depends on which surface asked.
+    `engine` lets a long-lived surface reuse one resolver; it must point at `root`.
+    """
+    resolver = engine or Preflight(root, jev)
+    decision = resolver.resolve(
+        service_id,
+        intent,
+        cwd=cwd,
+        profile_id=profile_id,
+        evidence_version=evidence_version,
+        evidence_fetched_at=evidence_fetched_at,
+        evidence_text=evidence_text,
+    )
+    Ledger(root).record(
+        service=decision.service_id,
+        profile=(decision.profile or {}).get("id"),
+        freshness=decision.freshness.get("state"),
+        tier=decision.tier,
+        intent=decision.intent,
+        procedure=decision.procedure,
+    )
+    return decision
 
 
 def render_decision(decision: PreflightDecision) -> str:

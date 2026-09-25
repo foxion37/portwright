@@ -32,15 +32,17 @@ the identity.
 
 ## Use
 
+`<portwright>` is the directory where you cloned this repository. The installed managed block uses that path.
+
 ```sh
-bin/portwright preflight vercel    # resolve Profile, Procedure, Lessons, freshness, tier
-bin/portwright browser select --candidates candidates.json --goal "<text>"  # pick one candidate via JEV (file holds the list)
-bin/portwright update --dry-run --json   # preview; update performs its own guarded git pull --ff-only, do not pull first
-bin/portwright update                   # apply: guarded fast-forward pull + stale re-validation + reports
-bin/portwright check              # validate Procedure, Lesson, and draft contracts
-bin/portwright memory --help      # create, review, and promote safe drafts
-bin/portwright client --help      # install, remove, and inspect Client adapters
-bin/portwright doctor             # compatibility health report
+<portwright>/bin/portwright preflight vercel    # resolve Profile, Procedure, Lessons, freshness, tier
+<portwright>/bin/portwright browser select --candidates candidates.json --goal "<text>"  # pick one candidate via JEV
+<portwright>/bin/portwright update --dry-run --json   # preview; update performs its own guarded git pull --ff-only
+<portwright>/bin/portwright update                   # apply: guarded fast-forward pull + stale re-validation
+<portwright>/bin/portwright check              # validate Procedure, Lesson, and draft contracts
+<portwright>/bin/portwright memory --help      # create, review, and promote safe drafts
+<portwright>/bin/portwright client --help      # install, remove, and inspect Client adapters
+<portwright>/bin/portwright doctor             # compatibility health report
 ```
 
 Since 2.0.0, `preflight` also returns the resolved `profile`, a `freshness`
@@ -48,19 +50,20 @@ state (`fresh|stale|unknown`), and an advisory `tier` (`auto|confirm|forbid`)
 with `rationale`. The tier is advice, not enforcement: `confirm` and `forbid`
 must be honoured by the Client's own permission prompt.
 
-Both commands accept `--home DIR` (or the `PORTWRIGHT_HOME` env var); the default
-home is `$HOME/developer/tools/portwright`.
+Commands that accept `--home DIR` also accept `PORTWRIGHT_HOME`; both select the
+content home. Without either, content lives in the clone itself. Packaged
+schemas, snippets, and skills come from the clone when absent from that home.
 
 ## Per-agent install
 
-- Claude Code → `bin/portwright client install claude-code`
-- Codex → `bin/portwright client install codex`
-- Hermes → `bin/portwright client install hermes`
-- Gemini CLI → `bin/portwright client install gemini-cli`
-- Cursor → `bin/portwright client install cursor` and follow the one manual User Rules step
-- OpenCode → `bin/portwright client install opencode`
-- Oh My Pi → `bin/portwright client install oh-my-pi`
-- VS Code Copilot → `bin/portwright client install vscode`
+- Claude Code → `<portwright>/bin/portwright client install claude-code`
+- Codex → `<portwright>/bin/portwright client install codex`
+- Hermes → `<portwright>/bin/portwright client install hermes`
+- Gemini CLI → `<portwright>/bin/portwright client install gemini-cli`
+- Cursor → `<portwright>/bin/portwright client install cursor` and follow the one manual User Rules step
+- OpenCode → `<portwright>/bin/portwright client install opencode`
+- Oh My Pi → `<portwright>/bin/portwright client install oh-my-pi`
+- VS Code Copilot → `<portwright>/bin/portwright client install vscode`
 
 Each adapter document under [`adapters/`](adapters/) explains its exact seam and
 recovery path. File-backed installs are idempotent, create a backup before a

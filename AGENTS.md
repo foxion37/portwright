@@ -19,7 +19,7 @@ It is not a gateway, a policy engine, a background server, an audit pipeline, or
 
 This repository is a one-way export from a private workstation repository. **Commits made directly here are overwritten by the next export.**
 
-That is deliberate: the source repository also holds personal notes that must never be published, so publication is a filtered build rather than a mirror. It changes how contributions work — see [CONTRIBUTING.md](CONTRIBUTING.md). A good pull request is read, ported upstream, and lands here in the next export; your content arrives, your commit does not.
+That is deliberate: the source repository also holds personal notes that must never be published, so publication is a filtered build rather than a mirror. See [Roles and scope](docs/roles-and-scope.md) and [CONTRIBUTING.md](CONTRIBUTING.md). Until the planned Hub MCP submission path arrives in M2, this public tree does not accept lesson contributions; never submit lesson text through GitHub Issue/PR free-form bodies.
 
 ## Two absolute rules
 
@@ -51,7 +51,7 @@ bin/portwright memory promote <draft-path>
 
 ## Derive on miss; never hand-author a library
 
-Procedures are cached because they were needed, not written in advance. A pull request that adds procedures for tools nobody used is out of scope.
+Procedures are cached because they were needed, not written in advance. Do not pre-write procedures for unused tools.
 
 When a note is missing or stale, derive the current procedure from the tool's official documentation, then cache it. When official docs and the shipped tool disagree, trust what you verified against the tool and say so in the note. Never hand a user a setup step you did not check against the current path.
 

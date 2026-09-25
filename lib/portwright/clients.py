@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from .contracts import PACKAGE_ROOT, resource_path
+
 
 START = "<!-- portwright:start"
 END = "<!-- portwright:end -->"
@@ -145,7 +147,7 @@ class ClientManager:
         destination_root = self._skill_root(client_id)
         destination_root.mkdir(parents=True, exist_ok=True)
         for skill in ("portwright-tool-use", "portwright-tool-memory"):
-            source = self.root / "skills" / skill
+            source = PACKAGE_ROOT / "skills" / skill
             destination = destination_root / skill
             if destination.is_symlink() and destination.resolve() == source.resolve():
                 continue
@@ -156,7 +158,7 @@ class ClientManager:
     def _preflight_skill_links(self, client_id: str) -> None:
         destination_root = self._skill_root(client_id)
         for skill in ("portwright-tool-use", "portwright-tool-memory"):
-            source = self.root / "skills" / skill
+            source = PACKAGE_ROOT / "skills" / skill
             destination = destination_root / skill
             if destination.is_symlink() and destination.resolve() == source.resolve():
                 continue
@@ -167,13 +169,15 @@ class ClientManager:
         destination_root = self._skill_root(client_id)
         for skill in ("portwright-tool-use", "portwright-tool-memory"):
             destination = destination_root / skill
-            source = self.root / "skills" / skill
+            source = PACKAGE_ROOT / "skills" / skill
             if destination.is_symlink() and destination.resolve() == source.resolve():
                 destination.unlink()
 
     def _canonical_block(self) -> str:
-        template = (self.root / "install" / "snippets" / "portwright.block.md").read_text(encoding="utf-8")
-        return template.replace("{{PORTWRIGHT_HOME}}", shlex.quote(str(self.root))).strip()
+        template = resource_path(self.root, "install/snippets/portwright.block.md").read_text(encoding="utf-8")
+        option = f" --home {shlex.quote(str(self.root))}" if self.root != PACKAGE_ROOT else ""
+        return (template.replace("{{PORTWRIGHT_HOME}}", shlex.quote(str(PACKAGE_ROOT)))
+                .replace("{{CONTENT_HOME_FLAG}}", option).strip())
 
     def _install_managed_block(self, target: Path, *, preamble: str | None = None) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -205,11 +209,17 @@ class ClientManager:
         pattern = re.compile(r"(?ms)^<!-- portwright:start.*?^<!-- portwright:end -->\s*")
         return pattern.sub("", text)
 
+    def _hook_command(self) -> str:
+        command = f"bash {shlex.quote(str(PACKAGE_ROOT / 'install' / 'portwright-reminder.sh'))}"
+        if self.root != PACKAGE_ROOT:
+            command = f"PORTWRIGHT_HOME={shlex.quote(str(self.root))} {command}"
+        return command
+
     def _install_claude_hook(self, target: Path) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         data = self._read_json_object(target)
         sessions = self._session_hooks(data, target, create=True)
-        command = f"bash {shlex.quote(str(self.root / 'install' / 'portwright-reminder.sh'))}"
+        command = self._hook_command()
         if not self._hook_in(sessions, command):
             sessions.append({"hooks": [{"type": "command", "command": command, "timeout": 5}]})
         serialized = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
@@ -223,7 +233,7 @@ class ClientManager:
         if not target.is_file():
             return
         data = self._read_json_object(target)
-        command = f"bash {shlex.quote(str(self.root / 'install' / 'portwright-reminder.sh'))}"
+        command = self._hook_command()
         sessions = self._session_hooks(data, target, create=False)
         filtered = [entry for entry in sessions if not self._hook_in([entry], command)]
         if filtered == sessions:
@@ -240,7 +250,7 @@ class ClientManager:
             sessions = self._session_hooks(data, target, create=False)
         except ValueError:
             return False
-        command = f"bash {shlex.quote(str(self.root / 'install' / 'portwright-reminder.sh'))}"
+        command = self._hook_command()
         return self._hook_in(sessions, command)
 
     @staticmethod

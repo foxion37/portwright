@@ -7,11 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-25
+
 ### Added
+- `bin/portwright review`: improvement proposals counted from the note corpus and a local usage ledger (`_local/usage.jsonl`, one metadata line per preflight — service, profile, freshness, tier, intent, procedure path; never arguments, results, paths, or credentials). Findings cover repeated recent failures, repeated cache misses, repeated `unknown` freshness without declared evidence, stale-but-used notes, and lessons a procedure never references. JEV is optional and may only reorder. Reports land in `_local/reviews/<date>.md`; `_local/` is gitignored and never exported.
 - `scripts/export_public.py` and `install/public-export.json`: one-way public distribution export. Selection is mechanical (include prefixes/files minus excludes, `distributable: true` notes only), personal identifiers are substituted and then gated by regex markers, and any surviving marker aborts the run before writing a file. `tests/test_public_export.py` covers selection, the marker gate, and dry-run isolation.
 - `LICENSE` (MIT) and a `Credits And Prior Art` section in both READMEs naming every borrowed repository and what was taken from it, plus an `In Plain Words` introduction covering the three note kinds, one preflight call, and the freshness/tier/self-filling-cache promises.
 - `public/AGENTS.md`, `public/AGENTS_KR.md`, and `public/CONTRIBUTING.md`: the public repository's own agent and contributor guide, exported to the root. The workstation `AGENTS.md` stays private, so the export config gained a `renames` map.
 - `services/google-apps-script.md`: clasp 3.3.0 procedure, derived because the official Apps Script guide still documents 2.x command names.
+- One note catalog reads `_private`, tracked, then `_hub` sources; duplicate ids within a source fail checks, while cross-source overrides warn.
+- One distributable-note rule governs both public exports and skill bundles.
+- `install/identifier-policy.json` and `install/secret-patterns.json` centralize publication identifiers and secret screening.
+- `docs/roles-and-scope.md` and its Korean companion distinguish local users from the planned public and company Hubs.
+- An outside-user acceptance test installs Claude Code and Codex from a public export cloned at an arbitrary path with an empty HOME.
+
+### Changed
+- The CLI and MCP preflight surfaces share a decision path and record usage in the local ledger.
+- Packaged resources and content-home roots resolve independently; local installations no longer depend on the author's checkout.
+- The public export excludes operator-only scripts; the planned Hub MCP will accept contributions in M2 instead of GitHub Issue/PR free-text submissions.
+
+### Safety
+- Identifier and secret screening reject disallowed content before export or publication; `_private` notes and user profiles remain local.
 
 ## [2.0.0] - 2026-09-21
 
@@ -96,3 +112,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/foxion37/portwright/releases/tag/v1.1.0
 [1.2.0]: https://github.com/foxion37/portwright/releases/tag/v1.2.0
 [2.0.0]: https://github.com/foxion37/portwright/releases/tag/v2.0.0
+[2.1.0]: ../../releases/tag/v2.1.0

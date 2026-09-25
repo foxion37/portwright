@@ -9,10 +9,12 @@ Oh My Pi documents this default user location in its
 This adapter intentionally targets the default home and does not follow a
 custom `PI_CODING_AGENT_DIR` or named profile.
 
+`<portwright>` is the directory where you cloned this repository; the installed managed block uses that path.
+
 ## Install
 
 ```sh
-~/developer/tools/portwright/bin/portwright client install oh-my-pi
+<portwright>/bin/portwright client install oh-my-pi
 ```
 
 The managed block is bounded by these markers:
@@ -25,13 +27,13 @@ The managed block is bounded by these markers:
 ## Verify
 
 ```sh
-~/developer/tools/portwright/bin/portwright client doctor oh-my-pi
+<portwright>/bin/portwright client doctor oh-my-pi
 ```
 
 ## Remove
 
 ```sh
-~/developer/tools/portwright/bin/portwright client remove oh-my-pi
+<portwright>/bin/portwright client remove oh-my-pi
 ```
 
 Text outside the managed block is preserved.

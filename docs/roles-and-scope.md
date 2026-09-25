@@ -1,0 +1,31 @@
+# Roles and scope
+
+Portwright helps an AI agent find current external-tool procedures and reusable lessons without asking you to repeat avoidable setup or failed calls. Its local CLI works with a personal cache; shared Hubs are **planned for M2 and M3**, not available in this release.
+
+## Who does what
+
+- **User:** A person using portwright, whether an outside developer, a company colleague, or a non-developer using an AI application. The user alone performs unavoidable human steps, such as consent.
+- **Agent:** The AI inside a Client. It reads the relevant Procedure and Lessons, derives a missing or stale procedure from the tool's current official documentation, and performs the agent's share through an independently connected tool backend.
+- **Client:** The application that hosts the Agent, such as an MCP-capable coding assistant. It installs or calls portwright; it retains its own permission controls. Portwright's action tier is advice, not enforcement.
+- **Operator:** For the planned public Hub, issues invite tokens, reviews promotions to `stable`, and confirms recalls of `stable` revisions.
+- **Company administrator:** For the planned company Hub, issues company invite tokens and manages that audience's access. The separate company Hub is planned only after its deployment and repository rights are verified; the Operator confirms `stable` recalls there as well.
+
+## Where code and knowledge live
+
+Three repository roles are separate: a **private work repository** develops the CLI and Hub code and keeps the owner's personal content; a **public distribution repository** receives a one-way, screened export (it still carries the distributable notes through v2.1; once the M2 commons is seeded from them, the export becomes code-only); a **private commons repository** holds the canonical git copy of the shared Procedure/Lesson cache, grades, and recall markers for one Hub. The company Hub will have its own private commons. Commons is a cache filled as tools are used, not a pre-filled registry: a missing or stale central procedure still follows derive-from-official-docs and cache-on-miss.
+
+There are three audience-specific delivery surfaces. **Personal** delivery keeps the owner's existing private catalog, including personal skills, inaccessible to public or company tokens. The **public Hub** is a planned, invite-only shared service with its own Worker, D1 intake, and empty release bucket. The **company Hub** is a later, separately deployed service with its own credentials, storage, and commons. Each shared Hub uses one Worker, one D1, and one Actions workflow to carry content; neither Hub executes external tool calls. Public and company Hubs never fall back to each other. The personal catalog never enters either shared Hub.
+
+## Reading and contributing
+
+Locally, a note id resolves in this order: `_private` → tracked notes → `_hub`. Duplicate ids within one source are errors; an id repeated across sources is a warned override. `_hub` is a planned gitignored local cache of synced Hub notes, separate from code updates. Without a cached procedure, the Agent uses current official documentation and caches the derived result. Users do not need access to the private commons repository to read delivered notes.
+
+In the planned shared Hubs, only `stable` notes appear in default preflight, bundles, and MCP reads. A `trial` note passes publication checks but remains experimental and is visible only by explicit opt-in; publication is not an endorsement. Three confirmations from distinct invite-token lineages plus Operator review are required for `stable`, and a changed revision needs fresh confirmations. Two reports from distinct lineages recall a `trial` revision; a `stable` recall needs Operator confirmation. A recall targets the note id and revision digest, including current reads, old pinned releases, and synced local caches when they synchronize. An offline cache cannot learn a new recall until it reconnects.
+
+Submission is **planned for M2 over MCP only** (`submit_lesson`, `confirm_lesson`, `report_failure`). GitHub Issue/PR free-text intake is not supported. Invite tokens are issued by the Operator for the public Hub or by a company administrator for the company Hub; there is no self-signup. A token is used for authentication, not as a credential for the user's external tools. The Hub stores only its hash, organization, scope (`read|submit|operator`), expiry, and a non-identifying lineage id, never names, email addresses, or IP addresses.
+
+## Boundaries and protection
+
+Portwright records how to use external tools, not their credentials or raw outputs. The precise guarantee for supported submissions is **local pre-check on supported submission paths + central re-check before persistent storage or model transmission + no retention of rejected raw text**. This is pattern-based screening, not a promise to detect every possible secret or identifier. Do not submit credential values, raw files, or logs. Free-text fields are screened again at the Hub before D1 storage or any model call; rejected raw text is kept out of persistence and logs. Do not include identifying information in a note. The private work repository, personal skills, and personal profiles do not become shared content.
+
+Portwright never stores or transmits users' external-service token, API-key, or environment-variable values; executes their external tool calls on their behalf; acts as a gateway or enforces tool-call policy; collects user-identifying information; or accepts raw file/log uploads. Invite-token authentication is the narrow exception for a Hub access credential sent in an authentication header. The Hubs authenticate intake and check publication, which does not make them gateways for external tool calls. Policy enforcement, a gateway, and an audit pipeline remain deferred. Planned combined model spending across the public and company Hubs is capped at USD 20 per month by reserving cost before each model call; Cloudflare and hourly, off-the-hour Actions are planned within free tiers. Budget exhaustion stops model analysis and new publishing, not reads or recall; platform-free-tier exhaustion is not a guarantee of continued online availability.

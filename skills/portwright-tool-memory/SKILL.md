@@ -5,11 +5,10 @@ description: Use when a new external-tool procedure or solved tool failure shoul
 
 # Portwright Tool Memory
 
-Global writer for Portwright tool-use memory. Default Portwright root:
-
-`~/developer/tools/portwright`
-
-If the repo is installed elsewhere, use that repo path instead.
+The managed block installed by Portwright contains the executable path for
+this clone. Use that path for the commands below; `<portwright>` denotes the
+directory where this repository was cloned. If a separate content home is
+configured, pass its `--home` flag to memory commands.
 
 Use when: after a new external-tool procedure or solved failure should become a safe Portwright draft.
 
@@ -37,10 +36,10 @@ Memory is draft first, not auto-final.
 Use the lifecycle interface instead of moving files by hand:
 
 ```bash
-~/developer/tools/portwright/bin/portwright memory draft procedure <service-id>
-~/developer/tools/portwright/bin/portwright memory draft lesson <service-id> <slug>
-~/developer/tools/portwright/bin/portwright memory review <draft-path>
-~/developer/tools/portwright/bin/portwright memory promote <draft-path>
+<portwright>/bin/portwright memory draft procedure <service-id>
+<portwright>/bin/portwright memory draft lesson <service-id> <slug>
+<portwright>/bin/portwright memory review <draft-path>
+<portwright>/bin/portwright memory promote <draft-path>
 ```
 
 `promote` validates the contract, blocks unresolved root cause or suspected

@@ -167,6 +167,27 @@ class TestRefusals(RepoCase):
         with self.assertRaises(SystemExit):
             self.build()
 
+    def test_identifier_in_public_bundle_refused_but_personal_remains_local(self) -> None:
+        write_skill(self.repo, "skills/portwright-tool-use/references/local.md",
+                    "private host " + ".".join(("100", "64", "0", "1")) + "\n")
+        self.commit()
+        with self.assertRaises(SystemExit) as caught:
+            self.build()
+        self.assertIn("skills/portwright-tool-use/references/local.md", str(caught.exception))
+        self.assertIn("private-network", str(caught.exception))
+        self.assertNotIn(".".join(("100", "64", "0", "1")), str(caught.exception))
+
+    def test_public_note_home_is_anonymized_without_changing_source(self) -> None:
+        path = write_service(self.repo, "local", extra="distributable: true")
+        path.write_text(path.read_text() + "\nUsed /users/" + "ab" + "/cache to reproduce.\n")
+        self.commit()
+        inventory = self.build()
+        output = (self.out / "local" / "SKILL.md").read_text()
+        self.assertIn("~/cache", output)
+        self.assertNotIn("/users/" + "ab" + "/", output)
+        self.assertIn("/users/" + "ab" + "/", path.read_text())
+        self.assertIn("local", inventory["skills"])
+
     def test_private_tracked_note_skipped_never_published(self) -> None:
         path = write_service(self.repo, "hidden", extra="distributable: true", private=True)
         git(self.repo, "add", "-f", str(path.relative_to(self.repo)))

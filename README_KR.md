@@ -72,6 +72,8 @@ Portwright v1은 일부러 작게 유지합니다.
 
 이 저장소는 절차와 교훈을 보관합니다. 에이전트는 행동하기 전에 그것을 읽습니다.
 
+외부 개발자, 회사 동료, 비개발자도 임의의 경로에 복제한 로컬 CLI를 에이전트와 함께 사용할 수 있습니다. 공유 공개 Hub(M2)와 별도 회사 Hub(M3)는 계획 단계이며 v2.1.0에는 아직 없습니다. 사용자별 역할과 범위는 [역할과 범위](docs/roles-and-scope_KR.md)를 참고하세요.
+
 ## 누구를 위한 것인가
 
 이 README는 초보자와 비개발자를 위해 썼습니다.
@@ -138,7 +140,7 @@ Portwright를 쓰는 에이전트는 먼저 이렇게 확인해야 합니다.
 
 짧은 버전은 이렇습니다.
 
-1. 이 저장소를 내 컴퓨터의 안정적인 위치에 clone합니다.
+1. 이 저장소를 내 컴퓨터의 안정적인 위치에 clone합니다. 아래 `<portwright>`는 clone한 디렉터리입니다. `--home`이나 `PORTWRIGHT_HOME`을 지정하지 않으면 노트도 이곳에 저장합니다.
 2. 사용하는 Client에 맞는 adapter를 고릅니다.
    - [Claude Code](install/adapters/claude-code.md)
    - [Codex](install/adapters/codex.md)
@@ -151,14 +153,14 @@ Portwright를 쓰는 에이전트는 먼저 이렇게 확인해야 합니다.
 3. 맞는 설치 명령을 실행합니다. Codex라면 다음과 같습니다.
 
 ```sh
-bin/portwright client install codex
+<portwright>/bin/portwright client install codex
 ```
 
 4. Client를 다시 시작하고 Memory와 설치 상태를 확인합니다.
 
 ```sh
-bin/portwright check
-bin/portwright client doctor codex
+<portwright>/bin/portwright check
+<portwright>/bin/portwright client doctor codex
 ```
 
 ## 사용 방법
@@ -184,6 +186,10 @@ bin/portwright preflight <service-id> [--intent call|instruct|recover] [--profil
 bin/portwright browser select --candidates candidates.json --goal "<text>" [--json]   # 파일에 후보 목록
 bin/portwright update --dry-run --json   # 미리보기. update 가 git pull --ff-only 를 직접 수행하므로 pull 을 먼저 하지 않는다
 bin/portwright update
+```
+
+```sh
+bin/portwright review --days 90   # 캐시가 말하는 다음 개선점 (추측이 아니라 카운팅)
 ```
 
 예시는 이렇게 말할 수 있습니다.

@@ -2,10 +2,12 @@
 
 Hermes reads `~/.hermes/SOUL.md` as its always-read instruction file.
 
+`<portwright>` is the directory where you cloned this repository; the installed managed block uses that path.
+
 ## Install
 
 ```sh
-~/developer/tools/portwright/bin/portwright client install hermes
+<portwright>/bin/portwright client install hermes
 ```
 
 The Client adapter installs or updates the canonical managed block exactly once:
@@ -18,13 +20,13 @@ The Client adapter installs or updates the canonical managed block exactly once:
 ## Verify
 
 ```sh
-~/developer/tools/portwright/bin/portwright client doctor hermes
+<portwright>/bin/portwright client doctor hermes
 ```
 
 ## Remove
 
 ```sh
-~/developer/tools/portwright/bin/portwright client remove hermes
+<portwright>/bin/portwright client remove hermes
 ```
 
 Text outside the managed block is preserved.

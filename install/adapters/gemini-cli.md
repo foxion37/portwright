@@ -2,10 +2,12 @@
 
 Gemini CLI reads `~/.gemini/GEMINI.md` as its always-read instruction file.
 
+`<portwright>` is the directory where you cloned this repository; the installed managed block uses that path.
+
 ## Install
 
 ```sh
-~/developer/tools/portwright/bin/portwright client install gemini-cli
+<portwright>/bin/portwright client install gemini-cli
 ```
 
 The Client adapter installs or updates the canonical managed block exactly once:
@@ -18,13 +20,13 @@ The Client adapter installs or updates the canonical managed block exactly once:
 ## Verify
 
 ```sh
-~/developer/tools/portwright/bin/portwright client doctor gemini-cli
+<portwright>/bin/portwright client doctor gemini-cli
 ```
 
 ## Remove
 
 ```sh
-~/developer/tools/portwright/bin/portwright client remove gemini-cli
+<portwright>/bin/portwright client remove gemini-cli
 ```
 
 Text outside the managed block is preserved.

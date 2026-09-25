@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -12,20 +13,10 @@ from .contracts import ContractCatalog, Issue, SERVICE_ID_RE
 
 
 SLUG_RE = SERVICE_ID_RE
-SECRET_PATTERNS = (
-    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
-    re.compile(r"\b(?:ghp|github_pat|sk_live|sk_test|xox[baprs])-[-A-Za-z0-9_]{8,}\b"),
-    re.compile(r"(?i)\b(?:token|cookie|oauth[_ -]?code|api[_ -]?key)\s*[:=]\s*(?!\[REDACTED\])\S{8,}"),
-    re.compile(r"(?i)\bauthorization\s*:\s*(?:bearer|basic)\s+\S{8,}"),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"\bnpm_[A-Za-z0-9]{20,}\b"),
-    re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
-    re.compile(r"\bglpat-[0-9A-Za-z_-]{20,}\b"),
-    re.compile(r"\bpypi-[0-9A-Za-z_-]{20,}\b"),
-    re.compile(r"\beyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
-    re.compile(r"(?i)\b(?:password|passwd|secret|client_secret|private_key)\s*[:=]\s*(?!\[REDACTED\])\S{6,}"),
-    re.compile(r"(?i)\bAccountKey\s*=\s*(?!\[REDACTED\])[^;\s]{16,}"),
-    re.compile(r"[a-z][a-z0-9+.-]*://[^\s/:]+:[^\s/@]+@[^\s]+", re.IGNORECASE),
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+SECRET_PATTERNS = tuple(
+    re.compile(item["regex"], re.IGNORECASE if item.get("flags") == "i" else 0)
+    for item in json.loads((PACKAGE_ROOT / "install" / "secret-patterns.json").read_text(encoding="utf-8"))["patterns"]
 )
 
 
@@ -63,6 +54,7 @@ human_steps:
 agent_can:
   - "<TODO actions the Agent performs itself>"
 status: active
+distributable: false
 ---
 
 ## 한 줄 요약
@@ -95,6 +87,7 @@ date: "{stamp}"
 service: {service_id}
 service_version: "<TODO affected version>"
 status: active
+distributable: false
 ---
 
 ## 증상
@@ -165,10 +158,12 @@ unconfirmed
         if not review.ok:
             return review
         draft = review.path
-        relative = draft.relative_to(self.root)
-        kind_dir = relative.parts[0]
-        private = self.catalog.validate_note(draft).data.get("distributable") is False
-        destination = self.root / kind_dir / ("_private" if private else "") / draft.name
+        note = self.catalog.validate_note(draft)
+        private = note.data.get("distributable") is not True
+        try:
+            destination = self.catalog.source_root(note.kind, "private" if private else "tracked") / draft.name
+        except ValueError as error:
+            return MemoryResult(path=draft, issues=(Issue("destination", str(error)),))
         safety_issue = self._memory_path_issue(destination)
         if safety_issue:
             return MemoryResult(path=draft, issues=(safety_issue,))
@@ -188,7 +183,7 @@ unconfirmed
             return MemoryResult(path=draft, issues=(safety_issue,))
         os.replace(draft, destination)
         try:
-            if kind_dir == "failures":
+            if note.kind == "failure":
                 self._link_lesson(destination)
         except Exception:
             os.replace(destination, draft)
@@ -202,13 +197,20 @@ unconfirmed
         service_id = note.data.get("service")
         if not isinstance(service_id, str):
             return
-        lesson_private = "_private" in lesson.relative_to(self.root).parts
-        candidates = [self.root / "services" / "_private" / f"{service_id}.md"]
-        if not lesson_private:
-            candidates.insert(0, self.root / "services" / f"{service_id}.md")
-        procedure = next((path for path in candidates if path.is_file()), None)
-        if procedure is None:
+        # Private Lessons only link privately; public Lessons prefer the distributed
+        # Procedure, falling back to private. Hub downloads are never written.
+        sources = ("private",) if note.source == "private" else ("tracked", "private")
+        # lookup skips unsafe roots; raise here so promote() rolls back instead.
+        for source in sources:
+            self.catalog.source_root("service", source)
+        target = None
+        for source in sources:
+            target = self.catalog.lookup("service", service_id, sources=(source,))
+            if target is not None:
+                break
+        if target is None:
             return
+        procedure = target.path
         safety_issue = self._memory_path_issue(procedure)
         if safety_issue:
             raise RuntimeError(safety_issue.render())

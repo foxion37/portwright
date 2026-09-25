@@ -7,6 +7,8 @@ secrets/
 *.secret
 services/_private/
 failures/_private/
+services/_hub/
+failures/_hub/
 
 # 게이트웨이/엔진 로컬 설정 (생성물)
 /engine-config/
@@ -42,3 +44,6 @@ docs/research/*-validation.json
 
 # 내보내기 산출물 표식
 .portwright-build
+
+# 로컬 사용 장부와 개선 리뷰 (기계-로컬, 배포 안 함)
+/_local/

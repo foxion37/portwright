@@ -3,10 +3,12 @@
 Codex uses the packaged `portwright-tool-use` and `portwright-tool-memory`
 skills plus one always-read managed block in `~/.codex/AGENTS.md`.
 
+`<portwright>` is the directory where you cloned this repository; the installed managed block uses that path.
+
 ## Install
 
 ```sh
-~/developer/tools/portwright/bin/portwright client install codex
+<portwright>/bin/portwright client install codex
 ```
 
 The Client adapter creates SSOT symlinks under `~/.codex/skills/` and installs
@@ -23,13 +25,13 @@ The managed block is bounded by these markers:
 ## Verify
 
 ```sh
-~/developer/tools/portwright/bin/portwright client doctor codex
+<portwright>/bin/portwright client doctor codex
 ```
 
 ## Remove
 
 ```sh
-~/developer/tools/portwright/bin/portwright client remove codex
+<portwright>/bin/portwright client remove codex
 ```
 
 Text outside the managed block is preserved.

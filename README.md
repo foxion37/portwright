@@ -72,6 +72,8 @@ Portwright v1 is deliberately small.
 
 The repo stores procedures and lessons. Your agent reads them before acting.
 
+The local CLI can be cloned and used from any directory by outside developers, company colleagues, and non-developers with an Agent. The shared public Hub (M2) and separate company Hub (M3) are planned, not available in v2.1.0. See [Roles and scope](docs/roles-and-scope.md) for what each audience can do.
+
 ## Who It Is For
 
 This README is written for beginners and non-developers.
@@ -138,7 +140,7 @@ Start with [install/README.md](install/README.md).
 
 Short version:
 
-1. Clone this repo somewhere stable on your machine.
+1. Clone this repo somewhere stable on your machine. `<portwright>` below means that clone directory; without `--home` or `PORTWRIGHT_HOME`, it also stores your notes.
 2. Pick the Client adapter:
    - [Claude Code](install/adapters/claude-code.md)
    - [Codex](install/adapters/codex.md)
@@ -151,14 +153,14 @@ Short version:
 3. Run the matching install command, for example:
 
 ```sh
-bin/portwright client install codex
+<portwright>/bin/portwright client install codex
 ```
 
 4. Restart the Client, then verify both memory and installation:
 
 ```sh
-bin/portwright check
-bin/portwright client doctor codex
+<portwright>/bin/portwright check
+<portwright>/bin/portwright client doctor codex
 ```
 
 ## Use
@@ -184,6 +186,10 @@ bin/portwright preflight <service-id> [--intent call|instruct|recover] [--profil
 bin/portwright browser select --candidates candidates.json --goal "<text>" [--json]   # file holds the candidate list
 bin/portwright update --dry-run --json   # preview: update runs git pull --ff-only itself, never pull first
 bin/portwright update
+```
+
+```sh
+bin/portwright review --days 90   # what the cache says to fix next (counted, not guessed)
 ```
 
 Example prompts:

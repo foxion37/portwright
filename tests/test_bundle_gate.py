@@ -52,3 +52,19 @@ class PersonalGateTests(unittest.TestCase):
                 with patch.object(gate, 'PERSONAL_APPROVAL', approval), patch.object(gate, 'ALLOW_FILE', Path(directory) / 'absent'), patch.object(gate, 'validated_inventory', return_value=inventory), patch.object(gate.JevClient, 'from_env', side_effect=AssertionError('model path reached')):
                     with self.assertRaises(SystemExit):
                         gate.main([directory])
+
+    def test_public_identifier_is_refused_before_model_submission(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            text = "private host " + ".".join(("100", "64", "0", "1"))
+            path = root / "public" / "SKILL.md"
+            path.parent.mkdir()
+            path.write_text(text)
+            inventory = {"skills": {"public": {"path": "public/SKILL.md",
+                                                "files": [{"path": "public/SKILL.md"}]}}}
+            with patch.object(gate, "PERSONAL_APPROVAL", root / "absent"), \
+                    patch.object(gate, "validated_inventory", return_value=inventory), \
+                    patch.object(gate.JevClient, "from_env") as client:
+                client.return_value.ask.side_effect = AssertionError("identifier reached model")
+                self.assertEqual(gate.main([directory]), 1)
+                client.return_value.ask.assert_not_called()

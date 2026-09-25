@@ -200,6 +200,16 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(changed.docs_changed, ["example"])
         self.assertEqual((self.local / "services/example.md").read_text(), procedure)
 
+    def test_symlink_source_root_is_not_revalidated(self) -> None:
+        notes = self.local / "services"
+        notes.rename(self.local / "detached-services")
+        notes.symlink_to(self.local / "detached-services", target_is_directory=True)
+        report = run_update(self.local, dry_run=True)
+        self.assertEqual(report.stale_candidates, 1)  # only the independent stale Lesson
+        self.assertEqual(report.revalidated, 1)
+        self.assertEqual(report.docs_planned, [])
+        self.assertEqual(report.unclassified, [])
+
 
 if __name__ == "__main__":
     unittest.main()

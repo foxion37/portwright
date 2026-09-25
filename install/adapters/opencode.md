@@ -6,10 +6,12 @@ adapter adds one managed block to that file and preserves all other text.
 OpenCode documents this global rule location in its
 [Rules guide](https://opencode.ai/docs/rules/#global).
 
+`<portwright>` is the directory where you cloned this repository; the installed managed block uses that path.
+
 ## Install
 
 ```sh
-~/developer/tools/portwright/bin/portwright client install opencode
+<portwright>/bin/portwright client install opencode
 ```
 
 The managed block is bounded by these markers:
@@ -22,13 +24,13 @@ The managed block is bounded by these markers:
 ## Verify
 
 ```sh
-~/developer/tools/portwright/bin/portwright client doctor opencode
+<portwright>/bin/portwright client doctor opencode
 ```
 
 ## Remove
 
 ```sh
-~/developer/tools/portwright/bin/portwright client remove opencode
+<portwright>/bin/portwright client remove opencode
 ```
 
 Text outside the managed block is preserved.

@@ -1,0 +1,46 @@
+{
+  "patterns": [
+    {
+      "id": "absolute-home",
+      "regex": "/(?:Users|home)/[a-z0-9_-]+/",
+      "flags": "i",
+      "replacement": "~/",
+      "public": true
+    },
+    {
+      "id": "private-network",
+      "regex": "\\b100\\.\\d+\\.\\d+\\.\\d+\\b",
+      "public": true
+    },
+    {
+      "id": "cloudflare-account",
+      "regex": "\\baccount_id\\s*[:=]\\s*[\\\"']?[0-9a-f]{32}\\b",
+      "flags": "i",
+      "public": true
+    }
+  ],
+  "substitutions": [],
+  "exceptions": [
+    {
+      "value": "foxion37/portwright",
+      "reason": "Public distribution repository reference, not a private account path"
+    },
+    {
+      "value": "Copyright (c) 2026 foxion37",
+      "reason": "Public upstream author attribution"
+    },
+    {
+      "value": "opsvc",
+      "reason": "Publicly documented tool command, not a user identifier"
+    }
+  ],
+  "name_hints": [],
+  "account_ids": [
+    "account_id: 32 lowercase or uppercase hex digits (value not stored)"
+  ],
+  "bucket_names": [],
+  "worker_names": [],
+  "repositories": [
+    "foxion37/portwright"
+  ]
+}

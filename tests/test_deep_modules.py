@@ -205,6 +205,7 @@ class MemoryLifecycleInterfaceTests(unittest.TestCase):
             procedure = home / "services" / "vercel.md"
             procedure.write_text(valid_service(), encoding="utf-8")
             name, lesson = valid_lesson()
+            lesson = lesson.replace("status: active", "status: active\ndistributable: true")
             draft = home / "failures" / "_drafts" / name
             draft.write_text(lesson, encoding="utf-8")
             run = run_cli("memory", "promote", f"failures/_drafts/{name}", "--home", directory)

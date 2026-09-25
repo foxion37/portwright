@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
+from portwright.contracts import PACKAGE_ROOT  # noqa: E402
 from portwright.mcp import serve  # noqa: E402
 from tests._v2 import FIXTURES, write_profile, write_service  # noqa: E402
 
@@ -129,7 +130,7 @@ class McpServerTests(unittest.TestCase):
             (draft / "2026-09-01-acme-wip.md").write_text("draft", encoding="utf-8")
             replies = _roundtrip(home, _call("status"))
             payload = _payload(replies[0])
-            self.assertEqual(payload["version"], "2.0.0")
+            self.assertEqual(payload["version"], (PACKAGE_ROOT / "VERSION").read_text(encoding="utf-8").strip())
             self.assertEqual(payload["root_name"], home.name)
             self.assertEqual(payload["notes"]["services"], 1)
             self.assertEqual(payload["notes"]["profiles"], 1)

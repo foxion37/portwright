@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
-from .contracts import ContractCatalog, PACKAGE_ROOT
+from .contracts import ContractCatalog, resource_path
 from .jev import JevClient, Judgment, Pending
 
 
@@ -207,11 +207,8 @@ def assess_freshness(
 
 
 def load_tier_rules(root: Path) -> list[dict[str, Any]]:
-    for base in (root, PACKAGE_ROOT):
-        path = base / "install" / "tiers.json"
-        if path.is_file():
-            return list(json.loads(path.read_text(encoding="utf-8")).get("rules", []))
-    return []
+    path = resource_path(root, "install/tiers.json")
+    return list(json.loads(path.read_text(encoding="utf-8")).get("rules", [])) if path.is_file() else []
 
 
 def decide_tier(

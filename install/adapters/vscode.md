@@ -8,10 +8,12 @@ VS Code loads user-level `*.instructions.md` files from
 VS Code documents the profile location and `applyTo` requirement in its
 [custom instructions guide](https://code.visualstudio.com/docs/copilot/customization/custom-instructions).
 
+`<portwright>` is the directory where you cloned this repository; the installed managed block uses that path.
+
 ## Install
 
 ```sh
-~/developer/tools/portwright/bin/portwright client install vscode
+<portwright>/bin/portwright client install vscode
 ```
 
 The managed block is bounded by these markers:
@@ -28,13 +30,13 @@ being silently repurposed.
 ## Verify
 
 ```sh
-~/developer/tools/portwright/bin/portwright client doctor vscode
+<portwright>/bin/portwright client doctor vscode
 ```
 
 ## Remove
 
 ```sh
-~/developer/tools/portwright/bin/portwright client remove vscode
+<portwright>/bin/portwright client remove vscode
 ```
 
 Text and frontmatter outside the managed block are preserved.

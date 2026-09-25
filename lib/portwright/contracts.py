@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -12,6 +13,41 @@ SERVICE_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ROOT_CAUSE_RE = re.compile(r"진짜 원인|root cause", re.IGNORECASE)
 DATE_FIELDS = {"last_verified", "date"}
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+NOTE_KINDS = {"services": "service", "failures": "failure", "profiles": "profile"}
+SOURCE_DIRS = {"private": "_private", "tracked": "", "hub": "_hub", "draft": "_drafts"}
+
+
+def resource_path(root: Path, relative: str) -> Path:
+    """Prefer a content-home override, otherwise use the packaged resource."""
+    local = root / relative
+    return local if local.is_file() else PACKAGE_ROOT / relative
+
+
+def note_kind(relative: str | Path) -> str | None:
+    """Recognize note files even when misplaced, so checks and export cannot miss them."""
+    path = Path(relative)
+    parts = path.parts
+    if path.is_absolute() or ".." in parts or len(parts) < 2:
+        return None
+    if path.suffix != ".md" or path.name == "_TEMPLATE.md" or parts[0] not in NOTE_KINDS:
+        return None
+    return NOTE_KINDS[parts[0]]
+
+
+def note_location(relative: str | Path) -> tuple[str, str] | None:
+    """Classify a lexical note path, including paths not yet present on disk."""
+    kind = note_kind(relative)
+    if kind is None:
+        return None
+    parts = Path(relative).parts
+    if len(parts) == 2:
+        return kind, "profile" if kind == "profile" else "tracked"
+    if kind == "profile":
+        return None
+    for source, directory in SOURCE_DIRS.items():
+        if directory and parts[1] == directory and not any(part.startswith("_") for part in parts[2:-1]):
+            return kind, source
+    return None
 
 
 @dataclass(frozen=True)
@@ -38,11 +74,22 @@ class NoteResult:
     def ok(self) -> bool:
         return not self.issues
 
+    @property
+    def source(self) -> str | None:
+        location = note_location(self.relative_path)
+        return location[1] if location else None
+
+    @property
+    def note_id(self) -> str:
+        value = self.data.get("id") if self.kind != "failure" else None
+        return value if isinstance(value, str) and value else self.path.stem
+
 
 @dataclass
 class ValidationReport:
     root: Path
     results: list[NoteResult]
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def failures(self) -> list[NoteResult]:
@@ -158,10 +205,7 @@ class ContractCatalog:
         }
 
     def _load_schema(self, kind: str) -> dict[str, Any]:
-        path = self.root / "install" / "schema" / f"{kind}.schema.json"
-        if not path.is_file():
-            path = PACKAGE_ROOT / "install" / "schema" / f"{kind}.schema.json"
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(resource_path(self.root, f"install/schema/{kind}.schema.json").read_text(encoding="utf-8"))
 
     def _kind(self, path: Path) -> str:
         relative = path.absolute().relative_to(self.root)
@@ -173,22 +217,114 @@ class ContractCatalog:
             return "profile"
         raise ValueError(f"note must live under services/, failures/, or profiles/: {path}")
 
-    def _is_draft(self, path: Path) -> bool:
-        return "_drafts" in path.resolve().relative_to(self.root).parts
+    def source_root(self, kind: str, source: str) -> Path:
+        directory = next((name for name, value in NOTE_KINDS.items() if value == kind), None)
+        if directory is None or (kind == "profile" and source != "profile"):
+            raise ValueError("unknown note kind or source")
+        if kind != "profile" and source not in SOURCE_DIRS:
+            raise ValueError("unknown note source")
+        path = self.root / directory
+        if kind != "profile":
+            path /= SOURCE_DIRS[source]
+        self._safe_components(path)
+        return path
+
+    def _safe_components(self, path: Path) -> None:
+        try:
+            parts = path.relative_to(self.root).parts
+        except ValueError:
+            raise ValueError("note path must be inside the Portwright root") from None
+        if ".." in parts:
+            raise ValueError("note path must not contain traversal")
+        current = self.root
+        for part in parts:
+            current /= part
+            if current.is_symlink():
+                raise ValueError("symlink note directories or files are not allowed")
+        if not path.resolve().is_relative_to(self.root):
+            raise ValueError("note path resolves outside the Portwright root")
+
+    def note_path(self, raw: str, *, include_drafts: bool = False) -> Path:
+        location = note_location(raw)
+        if location is None or (location[1] == "draft" and not include_drafts):
+            raise ValueError("path must be a relative catalog .md note")
+        path = self.root / raw
+        self._safe_components(path)
+        if not path.is_file():
+            raise ValueError("note not found")
+        return path
+
+    def _roots(self, include_drafts: bool) -> Iterable[tuple[str, str, Path]]:
+        for directory, kind in NOTE_KINDS.items():
+            sources = {"profile": ""} if kind == "profile" else SOURCE_DIRS
+            for source, suffix in sources.items():
+                if source != "draft" or include_drafts:
+                    yield kind, source, self.root / directory / suffix
+
+    def directory_issues(self, *, include_drafts: bool = True) -> list[NoteResult]:
+        results: list[NoteResult] = []
+        for kind, source, path in self._roots(include_drafts):
+            try:
+                self.source_root(kind, source)
+            except ValueError as error:
+                results.append(NoteResult(path, path.relative_to(self.root).as_posix(), kind,
+                                          issues=[Issue("directory", str(error))]))
+        return results
 
     def iter_notes(self, *, include_drafts: bool = True) -> list[Path]:
         paths: list[Path] = []
-        for directory in (self.root / "services", self.root / "failures", self.root / "profiles"):
-            if directory.is_symlink():
+        for kind, source, directory in self._roots(include_drafts):
+            try:
+                self.source_root(kind, source)
+            except ValueError:
                 continue
             if not directory.is_dir():
                 continue
-            iterator = directory.rglob("*.md") if include_drafts else directory.glob("*.md")
-            for path in iterator:
-                if path.name == "_TEMPLATE.md":
-                    continue
-                paths.append(path)
+            for parent, dirs, files in os.walk(directory, followlinks=False):
+                dirs[:] = sorted(name for name in dirs
+                                 if source not in {"tracked", "profile"}
+                                 and not name.startswith("_") and not (Path(parent) / name).is_symlink())
+                for name in files:
+                    path = Path(parent) / name
+                    if note_location(path.relative_to(self.root)):
+                        paths.append(path)
         return sorted(paths)
+
+    @staticmethod
+    def _identities(results: list[NoteResult]) -> dict[tuple[str, str], list[NoteResult]]:
+        groups: dict[tuple[str, str], list[NoteResult]] = {}
+        for note in results:
+            if note.source in {"private", "tracked", "hub", "profile"}:
+                groups.setdefault((note.kind, note.note_id), []).append(note)
+        for group in groups.values():
+            by_source: dict[str, list[NoteResult]] = {}
+            for note in group:
+                by_source.setdefault(note.source, []).append(note)
+            for source, duplicates in by_source.items():
+                if len(duplicates) > 1:
+                    for note in duplicates:
+                        note.issues.append(Issue("duplicate_id", f"{note.note_id} occurs more than once in {source}"))
+        return groups
+
+    def notes(self, kind: str | None = None, *, sources: tuple[str, ...] | None = None) -> list[NoteResult]:
+        """Filter sources, then resolve each kind/id by private > tracked > hub.
+
+        Invalid winners remain visible; status/validity never selects a lower copy
+        of that identity. Unsafe roots are omitted (see directory_issues), drafts
+        are check-only, and location/flag consistency is a workspace check.
+        """
+        results = []
+        for path in self.iter_notes(include_drafts=False):
+            note_kind, source = note_location(path.relative_to(self.root))
+            if (kind is None or kind == note_kind) and (sources is None or source in sources):
+                results.append(self.validate_note(path))
+        groups = self._identities(results)
+        priority = {"private": 0, "tracked": 1, "hub": 2, "profile": 0}
+        return [min(group, key=lambda note: (priority[note.source], note.relative_path))
+                for _, group in sorted(groups.items())]
+
+    def lookup(self, kind: str, note_id: str, *, sources: tuple[str, ...] | None = None) -> NoteResult | None:
+        return next((note for note in self.notes(kind, sources=sources) if note.note_id == note_id), None)
 
     def validate_note(
         self,
@@ -346,40 +482,85 @@ class ContractCatalog:
                 result.issues.append(Issue("draft", f"unresolved placeholder {marker!r}"))
 
     def validate_workspace(self, *, strict: bool = False, include_drafts: bool = True) -> ValidationReport:
-        results: list[NoteResult] = []
-        roots = (
-            ("services", "service"), ("failures", "failure"), ("profiles", "profile"),
-            ("services/_private", "service"), ("failures/_private", "failure"),
-        )
-        for directory_name, kind in roots:
-            directory = self.root / directory_name
-            if directory.is_symlink():
-                results.append(
-                    NoteResult(
-                        path=directory,
-                        relative_path=directory_name,
-                        kind=kind,
-                        issues=[Issue("directory", "symlink note directories are not allowed")],
-                    )
-                )
-        results.extend(
-            self.validate_note(path, strict=strict)
-            for path in self.iter_notes(include_drafts=include_drafts)
-        )
-        return ValidationReport(root=self.root, results=results)
+        results = [self.validate_note(path, strict=strict)
+                   for path in self.iter_notes(include_drafts=include_drafts)]
+        groups = self._identities(results)
+        warnings = []
+        for (kind, note_id), group in sorted(groups.items()):
+            if len({note.source for note in group}) > 1:
+                paths = ", ".join(note.relative_path for note in group)
+                warnings.append(f"{kind} {note_id}: cross-source override (private > tracked > hub): {paths}")
+        for note in results:
+            if note.source == "private" and note.data.get("distributable") is True:
+                note.issues.append(Issue("distributable", "private notes must not be distributable"))
+            elif note.source == "tracked" and note.data.get("distributable") is not True:
+                note.issues.append(Issue("distributable", "tracked notes must declare true"))
+        results.extend(self.directory_issues(include_drafts=include_drafts))
+        for kind in NOTE_KINDS.values():
+            try:
+                base = self.source_root(kind, "profile" if kind == "profile" else "tracked")
+            except ValueError:
+                continue
+            for parent, dirs, files in os.walk(base, followlinks=False):
+                dirs[:] = sorted(name for name in dirs
+                                 if not name.startswith("_") and not (Path(parent) / name).is_symlink())
+                if Path(parent) == base:
+                    continue
+                for name in sorted(files):
+                    path = Path(parent) / name
+                    relative = path.relative_to(self.root).as_posix()
+                    if note_kind(relative):
+                        results.append(NoteResult(path, relative, kind, issues=[
+                            Issue("location", "notes outside named sources must be top-level files"),
+                        ]))
+        return ValidationReport(root=self.root, results=results, warnings=warnings)
+
+
+def is_distributable(note: NoteResult) -> bool:
+    """The publication boundary: valid, explicitly public notes in the tracked source only."""
+    return note.source == "tracked" and note.ok and note.data.get("distributable") is True
+
+
+def distributable_notes(root: Path, paths: Iterable[str | Path]) -> list[NoteResult]:
+    """Select publication notes from Git's path list without reading private, Hub or draft content."""
+    catalog = ContractCatalog(root)
+    selected = []
+    relatives: set[str] = set()
+    for raw in paths:
+        path = Path(raw)
+        if path.is_absolute():
+            path = path.relative_to(catalog.root)
+        relatives.add(path.as_posix())
+    for relative in sorted(relatives):
+        location = note_location(relative)
+        if location is None or location[1] != "tracked":
+            continue
+        try:
+            catalog.note_path(relative)
+        except ValueError as error:
+            raise ValueError(f"{relative}: {error}") from None
+        note = catalog.validate_note(catalog.root / relative)
+        if note.data.get("distributable") is True and not note.ok:
+            issues = "; ".join(issue.render() for issue in note.issues)
+            raise ValueError(f"refusing invalid distributable note: {relative} ({issues})")
+        if is_distributable(note):
+            selected.append(note)
+    return selected
 
 
 def render_report(report: ValidationReport) -> str:
     lines = [f"portwright check — home: {report.root}"]
     if not report.results:
         lines.append("  (no notes found under services/ or failures/)")
-        return "\n".join(lines)
-    width = max(len(result.relative_path) for result in report.results)
+    width = max((len(result.relative_path) for result in report.results), default=0)
     for result in report.results:
         tag = "PASS" if result.ok else "FAIL"
         line = f"  [{tag}] {result.relative_path.ljust(width)}"
         if result.issues:
             line += "  — " + "; ".join(issue.render() for issue in result.issues)
         lines.append(line)
+    lines.extend(f"  [WARN] {warning}" for warning in report.warnings)
+    if report.warnings:
+        lines.append(f"  {len(report.warnings)} warnings")
     lines.append(f"  {report.passed} passed, {len(report.failures)} failed")
     return "\n".join(lines)
