@@ -724,6 +724,19 @@ class ScreeningTests(unittest.TestCase):
             with self.subTest(case=index):
                 self.assertIn("identifier", hc.screening_issues(text, identifiers=rules))
 
+    def test_home_path_rule_ignores_api_paths_but_keeps_real_homes(self) -> None:
+        policy = json.loads((ROOT / "install" / "identifier-policy.json").read_text())
+        rules = hc.identifier_patterns(entry for entry in policy["patterns"] if entry["id"] == "absolute-home")
+        # Built at runtime so the public export's home-path substitution cannot rewrite them.
+        homes = ("run /" + "Users/someone/app", "file:///" + "Users/someone/app", "`/" + "home/someone/.config`",
+                 "C:/" + "Users/someone/", "under /" + "users/someone/cache")
+        for text in homes:
+            with self.subTest(text=text):
+                self.assertEqual(hc.screening_issues(text, identifiers=rules), ["identifier"])
+        for text in ("POST gmail/v1/" + "users/me/messages/send", "https://api.github.com/" + "users/octocat/repos"):
+            with self.subTest(text=text):
+                self.assertEqual(hc.screening_issues(text, identifiers=rules), [])
+
 
 class _FakeResponse:
     def __init__(self, payload: bytes):

@@ -35,7 +35,7 @@
     },
     {
       "id": "absolute-home",
-      "regex": "/(?:Users|home)/[a-z0-9_-]+/",
+      "regex": "(?<![A-Za-z0-9_.-])/(?:Users|home)/[a-z0-9_-]+/",
       "flags": "i",
       "replacement": "~/",
       "public": true

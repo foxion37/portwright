@@ -112,7 +112,7 @@ def gate_digest(*, revision: str, doc_digest: str, answers: dict, policy: dict) 
         "answers": answers,
         **{key: policy[key] for key in (
             "gate_version", "pricing_version", "secret_policy_digest",
-            "identifier_policy_digest", "official_domains_digest",
+            "identifier_policy_digest", "official_domains_digest", "questions_digest",
         )},
     })
 

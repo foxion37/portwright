@@ -6,8 +6,8 @@
       "state": "published"
     },
     "injection": {
-      "state": "held",
-      "reason_code": "injection_suspected"
+      "state": ["held", "rejected"],
+      "reason_code": ["injection_suspected", "identifier"]
     }
   },
   "edge_expectations": {
