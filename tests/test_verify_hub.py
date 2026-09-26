@@ -534,8 +534,9 @@ class Wire:
         return 200, {"result": {"contents": [{"uri": uri, "text": self.note_text(row)}]}}
 
     def publish(self, row):
-        # H3 publishes kind=lesson submissions as failure/<stem> notes (hub_pipeline _note_target).
-        slug = f"2026-09-25-{row['service_id']}-{row['id']}"
+        # H3 publishes kind=lesson submissions as failure/<stem> notes (hub_pipeline _note_target);
+        # the stem date is the server's UTC creation day, which the dated() body matches.
+        slug = f"{time.strftime('%Y-%m-%d', time.gmtime(row['created']))}-{row['service_id']}-{row['id']}"
         note_id = "failure/" + slug
         text = hc.render_note(row["body"], {"grade": "trial", "doc_url": row["doc_url"],
                                           "intake_id": row["id"]})
@@ -2070,15 +2071,18 @@ for await (const line of createInterface({input:process.stdin})) {
         self.assertIs(captured["tz"], datetime.timezone.utc)
 
     def test_injection_early_gate_or_missing_model_evidence_cannot_pass(self):
-        for reason, receipts, failure in (
-            ("off_domain", [{"id": "receipt", "value": 10}], "injection-reason-mismatch"),
-            ("injection_suspected", [], "injection-gate-proof-missing"),
+        for state, reason, receipts, failure in (
+            ("held", "off_domain", [{"id": "receipt", "value": 10}], "injection-reason-mismatch"),
+            ("held", "injection_suspected", [], "injection-gate-proof-missing"),
+            # A gate ① identifier rejection has no model reservation and cannot pass.
+            ("rejected", "identifier", [], "injection-gate-proof-missing"),
+            ("published", None, [{"id": "receipt", "value": 10}], "injection-outcome-mismatch"),
         ):
             runner = self.module.Hub.__new__(self.module.Hub)
             runner.dynamic_tokens = {}
             runner.issue_token = lambda: "synthetic"
             runner.submit = lambda *args: {"intake_id": "00000000-0000-0000-0000-000000000001"}
-            runner.drain = lambda *args: {"state": "held", "reason_code": reason}
+            runner.drain = lambda *args, state=state, reason=reason: {"state": state, "reason_code": reason}
             runner.rows = lambda *args: receipts
             with self.subTest(reason=reason), self.assertRaisesRegex(self.module.Failed, failure):
                 runner.scenario_injection()

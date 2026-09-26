@@ -1139,9 +1139,13 @@ class Hub:
                         "normal-model-proof-missing")
             else:
                 # Only a real gate-④ refusal proves the injection was judged, not dropped early.
-                require(row["state"] == expected.get("state"), "injection-outcome-mismatch")
-                require(row.get("reason_code") == expected.get("reason_code"),
-                        "injection-reason-mismatch")
+                # Seed: an attack is held or rejected. Gate ④ reports a personal-data
+                # suspicion as rejected/identifier before the malicious hold.
+                states = expected.get("state") if isinstance(expected.get("state"), list) else [expected.get("state")]
+                reasons = (expected.get("reason_code") if isinstance(expected.get("reason_code"), list)
+                           else [expected.get("reason_code")])
+                require(row["state"] in states, "injection-outcome-mismatch")
+                require(row.get("reason_code") in reasons, "injection-reason-mismatch")
                 require(len(gate_rows) >= 1, "injection-gate-proof-missing")
                 delivered = self.read_notes(trial=True)
                 require((row.get("note_id"), row.get("revision")) not in visible_notes(delivered)

@@ -895,6 +895,80 @@ class GateTests(unittest.TestCase):
         twice = hp.gate_submission(self.item(body=procedure_note() + "\nkey %2541KIAIOSFODNN7EXAMPLE used"), self.domains, _fixture_client(), None)
         self.assertEqual(twice.state, "passed")
 
+    def test_official_document_matches_are_masked_before_the_model(self):
+        seen = []
+
+        class Client:
+            mode = "fixture"
+
+            def ask(self, fixture_id, state, questions):
+                seen.append(state["official_document"])
+                return Judgment(status="ok", source="fixture", answers=passing_answers(), usage={})
+
+        # Official pages quote placeholder keys and hosts; only the page is masked.
+        example = "Set key " + "AKIA" + "IOSFODNN7EXAMPLE" + " and open http://" + "localhost" + ":8080 today."
+        with patch.object(hp.doc_cache, "fetch_document", lambda url, hosts, prefixes: example):
+            masked = hp.gate_submission(self.item(), self.domains, Client(), None)
+        self.assertEqual(masked.state, "passed")
+        self.assertEqual(seen, ["Set key [redacted] and open http://[redacted]:8080 today."])
+        self.assertEqual(masked.doc_digest, hp.hub_contracts.sha256_digest(seen[0]))
+        # A match that survives masking only in its percent-decoded form still holds.
+        encoded = "Set key %41KIA" + "IOSFODNN7EXAMPLE now."
+        with patch.object(hp.doc_cache, "fetch_document", lambda url, hosts, prefixes: encoded):
+            held = hp.gate_submission(self.item(), self.domains, Client(), None)
+        self.assertEqual((held.state, held.reason_code), ("held", "document_unavailable"))
+        self.assertEqual(len(seen), 1)
+
+    def test_request_limit_is_thirty_two_thousand_bytes_without_truncation(self):
+        self.assertEqual(hp.MAX_MODEL_BYTES, 32_000)
+        self.assertEqual(hp.load_pricing().max_input_tokens, 32_000)
+        body = "Acme deploy documentation body. "
+        with patch.object(hp.doc_cache, "fetch_document", lambda url, hosts, prefixes: body * 800):
+            fits = hp.gate_submission(self.item(), self.domains, _fixture_client(), None)
+        self.assertEqual(fits.state, "passed", "a 25.6 KB page fits the raised limit")
+        # Oversize pages are held before any regex pass (some patterns are quadratic on long runs).
+        with patch.object(hp.doc_cache, "fetch_document", lambda url, hosts, prefixes: body * 1100), \
+                patch.object(hp, "_mask_document", side_effect=AssertionError("masked an oversize page")):
+            too_large = hp.gate_submission(self.item(), self.domains, _fixture_client(), None)
+        self.assertEqual((too_large.state, too_large.reason_code), ("held", "evidence_too_large"))
+
+    def test_lessons_ask_for_same_feature_without_contradiction(self):
+        asked = {}
+
+        class Client:
+            mode = "fixture"
+
+            def ask(self, fixture_id, state, questions):
+                asked[fixture_id] = questions
+                return Judgment(status="ok", source="fixture", answers=passing_answers(), usage={})
+
+        today = time.strftime("%Y-%m-%d", time.gmtime())
+        lesson = self.item(kind="lesson", body=lesson_note(date=today))
+        procedure = self.item()
+        self.assertEqual(hp.gate_submission(lesson, self.domains, Client(), None).state, "passed")
+        self.assertEqual(hp.gate_submission(procedure, self.domains, Client(), None).state, "passed")
+        lesson_questions = asked[f"hub-gate-{lesson['id']}"]
+        self.assertEqual(asked[f"hub-gate-{procedure['id']}"]["supported"], hp.NOUL_QUESTIONS["supported"])
+        self.assertEqual(lesson_questions["supported"], hp.LESSON_SUPPORTED_QUESTION)
+        for key in ("evidence_consistent", "malicious", "personal"):
+            self.assertEqual(lesson_questions[key], hp.NOUL_QUESTIONS[key])
+
+    def test_a_question_change_invalidates_existing_proofs(self):
+        policy = hp.gate_policy(self.domains, "acme")
+        self.assertEqual(policy["questions_digest"], hp.QUESTIONS_DIGEST)
+        with patch.dict(hp.LESSON_SUPPORTED_QUESTION, {"instructions": "A different question."}):
+            changed = hp.hub_contracts.canonical_digest({"procedure": hp.noul_questions("procedure"),
+                                                          "lesson": hp.noul_questions("lesson"), "bounds": hp.NOUL_BOUNDS})
+        self.assertNotEqual(changed, hp.QUESTIONS_DIGEST)
+        proof = hp.gate_proof("service/acme", "sha256:" + "a" * 64, "sha256:" + "b" * 64,
+                              {"supported": 0.95, "evidence_consistent": 0.95, "malicious": 0.01, "personal": 0.01},
+                              {**policy, "questions_digest": changed})
+        entry = {"gate_digest": proof["gate_digest"], "doc_digest": proof["doc_digest"]}
+        self.assertEqual(hp._proof_issue(proof, entry, policy), "policy_changed")
+        # Proofs written before the questions_digest field existed are a policy change too.
+        legacy = {**proof, "policy": {key: value for key, value in policy.items() if key != "questions_digest"}}
+        self.assertEqual(hp._proof_issue(legacy, entry, policy), "policy_changed")
+
     def test_evidence_not_specific_and_malformed_judgments_hold(self):
         vague = hp.gate_submission(self.item(success_evidence={"action": "ok", "outcome": "success"}), self.domains, _fixture_client(), None)
         self.assertEqual((vague.state, vague.reason_code), ("held", "evidence_not_specific"))
@@ -2014,25 +2088,35 @@ class RunPipelineTests(unittest.TestCase):
         self.assertNotIn("success_evidence", payload)
         self.assertEqual(calls, [])
 
-    def test_confirm_evidence_shape_and_document_are_screened_before_the_model(self):
+    def test_confirm_evidence_is_screened_and_the_document_masked_before_the_model(self):
         self.stub()
-        calls = self.model_calls()
+        from portwright import jev
+
+        seen: list[str] = []
+
+        def ask(client, fixture_id, state, questions):
+            seen.append(state["official_document"])
+            return Judgment(status="ok", source="fixture", answers=passing_answers(), usage={})
+
         seeded = self.seed("services/acme.md", procedure_note(), "trial")
         shaped = self.fixture.add_event(
             kind="confirm", note_id="service/acme", revision=seeded["revision"], lineage_id="l1",
             payload={"validation": "pending", "payload_digest": "d1", "success_evidence": {"action": "ran acme deploy --prod", "outcome": "health check returned 200", "extra": "x" * 5000}},
         )
-        hp.run_pipeline(self.commons, ROOT, self.fixture.url, "public")
-        with patch.object(hp.doc_cache, "fetch_document", lambda url, hosts, prefixes: "Contact admin@corp.internal at 192.168.1.10 for deploys."):
-            documented = self.fixture.add_event(
-                kind="confirm", note_id="service/acme", revision=seeded["revision"], lineage_id="l2",
-                payload={"validation": "pending", "payload_digest": "d2", "success_evidence": {"action": "ran acme deploy --prod", "outcome": "health check returned 200"}},
-            )
+        with patch.object(jev.JevClient, "ask", ask):
             hp.run_pipeline(self.commons, ROOT, self.fixture.url, "public")
-        for event_id in (shaped, documented):
-            payload = json.loads(self.fixture.conn.execute("SELECT payload FROM events WHERE id=?", (event_id,)).fetchone()["payload"])
-            self.assertEqual(payload["validation"], "held")
-        self.assertEqual(calls, [])
+            self.assertEqual(seen, [], "a malformed confirmation never reaches the model")
+            with patch.object(hp.doc_cache, "fetch_document", lambda url, hosts, prefixes: "Contact admin@corp.internal at 192.168.1.10 for deploys."):
+                documented = self.fixture.add_event(
+                    kind="confirm", note_id="service/acme", revision=seeded["revision"], lineage_id="l2",
+                    payload={"validation": "pending", "payload_digest": "d2", "success_evidence": {"action": "ran acme deploy --prod", "outcome": "health check returned 200"}},
+                )
+                hp.run_pipeline(self.commons, ROOT, self.fixture.url, "public")
+        states = {event_id: json.loads(self.fixture.conn.execute("SELECT payload FROM events WHERE id=?", (event_id,)).fetchone()["payload"])["validation"]
+                  for event_id in (shaped, documented)}
+        self.assertEqual(states, {shaped: "held", documented: "passed"})
+        # The official page reached the model only with its identifiers masked.
+        self.assertEqual(seen, ["Contact [redacted] at [redacted] for deploys."])
 
     def test_intake_committed_to_git_but_not_recorded_is_recovered_without_regating(self):
         self.stub()

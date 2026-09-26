@@ -1,4 +1,4 @@
-# Install as the only workflow in commons after pinning the approved v2.2.2 SHA.
+# Install as the only workflow in commons after pinning the approved v2.2.3 SHA.
 name: Commons Hub
 
 on:
@@ -45,7 +45,7 @@ jobs:
           PORTWRIGHT_CODE_REF: ${{ vars.PORTWRIGHT_CODE_REF }}
         run: |
           test "$(git -C code rev-parse HEAD)" = "$PORTWRIGHT_CODE_REF"
-          test "$(git -C code rev-parse 'v2.2.2^{commit}')" = "$PORTWRIGHT_CODE_REF"
+          test "$(git -C code rev-parse 'v2.2.3^{commit}')" = "$PORTWRIGHT_CODE_REF"
           git -C commons config core.hooksPath /dev/null
           git -C commons config user.name portwright-hub
           git -C commons config user.email portwright-hub@users.noreply.github.com

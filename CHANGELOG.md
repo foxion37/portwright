@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-09-26
+### Changed
+- Lesson submissions are judged on whether the official document covers the same service feature without contradicting the note. They are no longer judged on whether it "substantively supports" the note. Procedures keep the original question.
+- Official documents are masked (`[redacted]`) where they match a secret or identifier pattern before judgment, instead of being refused. Submitted text is still rejected.
+- The model request limit rises from 24,000 to 32,000 bytes. Longer requests are still held, never truncated.
+- Gate policies bind a digest of the question set. Proofs made under older questions, pricing, or identifier policy are withheld until re-judged. `gate_version` stays `hub-gates-v1`, so existing clients keep syncing.
+
+### Fixed
+- The `absolute-home` identifier rule no longer matches API paths such as `gmail/v1/users/me/`.
+- The Hub verifier's wire test derives the note filename date from the server's UTC creation day, so it no longer fails after midnight UTC.
+- The live injection verifier accepts both gate ④ security refusals the seed allows: a malicious hold (`injection_suspected`) and a personal-data rejection (`identifier`). Each still needs a model reservation, so an early gate ① rejection cannot pass. On v2.2.2 the model rejected one fixed attack as `identifier`, which the verifier had wrongly treated as a mismatch.
+
 ## [2.2.2] - 2026-09-26
 ### Fixed
 - One-time note migration now processes only the paths listed in the evidence manifest. A tracked `failures/_TEMPLATE.md` failed note-ID parsing and aborted the whole run before any gate ran.
@@ -155,3 +167,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [2.2.0]: ../../releases/tag/v2.2.0
 [2.2.1]: ../../releases/tag/v2.2.1
 [2.2.2]: ../../releases/tag/v2.2.2
+[2.2.3]: ../../releases/tag/v2.2.3

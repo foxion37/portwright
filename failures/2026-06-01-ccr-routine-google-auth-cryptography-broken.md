@@ -29,7 +29,7 @@ google-auth 쓰지 말고 **openssl로 RS256 JWT 수동 서명** → oauth2 toke
 2. header `{"alg":"RS256","typ":"JWT"}`, claim `{iss:client_email, sub:<impersonate user>, scope:"https://www.googleapis.com/auth/gmail.send", aud:"https://oauth2.googleapis.com/token", iat, exp}` → 각각 base64url.
 3. `printf '%s' "$header.$claim" | openssl dgst -sha256 -sign key.pem | base64url` → 서명.
 4. `curl -X POST https://oauth2.googleapis.com/token -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer -d assertion=$JWT` → access_token.
-5. `curl -X POST https://gmail.googleapis.com/gmail/v1~/messages/send -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"raw":"<base64url MIME>"}'`.
+5. `curl -X POST https://gmail.googleapis.com/gmail/v1/users/me/messages/send -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"raw":"<base64url MIME>"}'`.
 - base64url = `base64 | tr '+/' '-_' | tr -d '='`.
 
 ## 교훈
