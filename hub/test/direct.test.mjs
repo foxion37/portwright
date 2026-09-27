@@ -55,7 +55,7 @@ test('HTTP sync defaults to stable, opts trial in, and excludes recalled revisio
   assert.deepEqual(listed.result.skills, []);
   const trial = await (await rpc('skills/list', { _meta: { 'io.portwright/include_trial': true } })).json();
   assert.deepEqual(trial.result.skills.map(s => s.grade), ['trial']);
-  const unavailable = await rpc('resources/read', { uri: 'skill://gisul/commons/stable/example/SKILL.md' });
+  const unavailable = await rpc('resources/read', { uri: 'skill://portwright/commons/stable/example/SKILL.md' });
   assert.equal(unavailable.status, 200);
   assert.equal((await unavailable.json()).error.code, -32602);
   assert.equal((await get(`/sync?commit=${'a'.repeat(40)}`)).status, 400);
@@ -87,7 +87,7 @@ test('personal cannot enable intake; valid personal reader has no submit tools',
 
 test('personal v1 catalog reads with a D1-registered bearer after URL cutover', async t => {
   const { rpc, bucket } = await worker(t, 'personal', 'false');
-  const commit = 'c'.repeat(40), uri = 'skill://gisul/personal/demo/SKILL.md';
+  const commit = 'c'.repeat(40), uri = 'skill://portwright/personal/demo/SKILL.md';
   const text = '---\nname: demo\ndescription: Private demo\n---\n\nPrivate\n';
   const file = await putImmutableObject(bucket, commit, 'personal/demo/SKILL.md', new TextEncoder().encode(text).buffer);
   const v1 = { schema_version: 1, commit, release: 'personal.old', skills: [{ uri, frontmatter: { name: 'demo', description: 'Private demo' }, resources: [{ uri, digest: file.digest, size: file.size }] }], files: [{ path: 'personal/demo/SKILL.md', uri, digest: file.digest, size: file.size }], aliases: {} };

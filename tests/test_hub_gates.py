@@ -69,7 +69,7 @@ def index_note(
         "revision": revision,
         "grade": grade,
         "path": path,
-        "uri": f"skill://gisul/commons/{path}",
+        "uri": f"skill://portwright/commons/{path}",
         "file_digest": file_digest or revision,
         "size": size,
     }
@@ -615,7 +615,7 @@ class NoteIndexTests(unittest.TestCase):
         note = index_note("service/example", "stable", REV_A)
         wrong_path = {**note, "path": "trial/example/notes/example.md"}
         self.assertIn("notes[0]:path_invalid", hc.validate_note_index(index_document([wrong_path]))["errors"])
-        wrong_uri = {**note, "uri": "skill://gisul/personal/stable/example/notes/example.md"}
+        wrong_uri = {**note, "uri": "skill://portwright/personal/stable/example/notes/example.md"}
         self.assertIn("notes[0]:uri_invalid", hc.validate_note_index(index_document([wrong_uri]))["errors"])
         wrong_kind = {**note, "kind": "lesson"}
         self.assertIn("notes[0]:kind_mismatch", hc.validate_note_index(index_document([wrong_kind]))["errors"])
@@ -634,12 +634,12 @@ class NoteIndexTests(unittest.TestCase):
             ],
             "skills": [
                 {
-                    "uri": "skill://gisul/commons/stable/example/SKILL.md",
+                    "uri": "skill://portwright/commons/stable/example/SKILL.md",
                     "grade": "stable",
                     "note_refs": [{"note_id": "service/example", "revision": REV_A}],
                 },
                 {
-                    "uri": "skill://gisul/commons/trial/example/SKILL.md",
+                    "uri": "skill://portwright/commons/trial/example/SKILL.md",
                     "grade": "trial",
                     "note_refs": [{"note_id": "service/example", "revision": REV_B}],
                 },
@@ -654,7 +654,7 @@ class NoteIndexTests(unittest.TestCase):
             "audience": "company",
             "files": [{"path": stable["path"], "digest": REV_C, "size": stable["size"]}],
             "skills": [
-                {"uri": "skill://gisul/commons/trial/example/SKILL.md", "grade": "stable", "note_refs": []}
+                {"uri": "skill://portwright/commons/trial/example/SKILL.md", "grade": "stable", "note_refs": []}
             ],
         }
         errors = hc.validate_note_index(index, inventory=broken)["errors"]

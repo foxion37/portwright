@@ -24,10 +24,10 @@ export function canonicalUri(uri: unknown): string {
   if (typeof uri !== "string" || /%2e|%2f|%5c|%00/i.test(uri) || uri.includes("\\")) throw new ReleaseError("Invalid skill URI", 400);
   let url: URL;
   try { url = new URL(uri); } catch { throw new ReleaseError("Invalid skill URI", 400); }
-  if (url.protocol !== "skill:" || url.host !== "gisul" || url.username || url.password || url.search || url.hash) throw new ReleaseError("Invalid skill URI", 400);
+  if (url.protocol !== "skill:" || url.host !== "portwright" || url.username || url.password || url.search || url.hash) throw new ReleaseError("Invalid skill URI", 400);
   let segments: string[];
   try { segments = url.pathname.slice(1).split("/").map(decodeURIComponent); } catch { throw new ReleaseError("Invalid skill URI", 400); }
-  if (segments.length < 2 || segments.some(part => !part || part === "." || part === ".." || /[\\/\x00-\x1f\x7f]/.test(part)) || `skill://gisul/${segments.map(encodeURIComponent).join("/")}` !== uri) throw new ReleaseError("Noncanonical skill URI", 400);
+  if (segments.length < 2 || segments.some(part => !part || part === "." || part === ".." || /[\\/\x00-\x1f\x7f]/.test(part)) || `skill://portwright/${segments.map(encodeURIComponent).join("/")}` !== uri) throw new ReleaseError("Noncanonical skill URI", 400);
   return uri;
 }
 
@@ -66,7 +66,7 @@ export function parseInventory(text: string, identity: ReleaseIdentity, audience
   for (const entry of inventory.skills) {
     canonicalUri(entry.uri);
     if (!entry.uri.endsWith("/SKILL.md") || skills.has(entry.uri) || typeof entry.frontmatter?.name !== "string" || entry.frontmatter.name !== decodeURIComponent(entry.uri.split("/").at(-2)!) || typeof entry.frontmatter.description !== "string" || !entry.frontmatter.description || !Array.isArray(entry.resources) || entry.resources.length > 512) throw new ReleaseError("Invalid skill manifest");
-    if (inventory.schema_version === 2 && (entry.grade !== "trial" && entry.grade !== "stable" || !Array.isArray(entry.note_refs) || (entry.origin === "code" ? entry.note_refs.length !== 0 || !entry.uri.startsWith("skill://gisul/code/") : entry.origin !== undefined || !entry.note_refs.length || !entry.uri.startsWith(`skill://gisul/commons/${entry.grade}/`)))) throw new ReleaseError("Invalid shared skill grade or note references");
+    if (inventory.schema_version === 2 && (entry.grade !== "trial" && entry.grade !== "stable" || !Array.isArray(entry.note_refs) || (entry.origin === "code" ? entry.note_refs.length !== 0 || !entry.uri.startsWith("skill://portwright/code/") : entry.origin !== undefined || !entry.note_refs.length || !entry.uri.startsWith(`skill://portwright/commons/${entry.grade}/`)))) throw new ReleaseError("Invalid shared skill grade or note references");
     skills.add(entry.uri);
     const root = entry.uri.slice(0, -8);
     const resources = new Set<string>();
@@ -76,7 +76,7 @@ export function parseInventory(text: string, identity: ReleaseIdentity, audience
       assertDigest(resource);
       const file = files.get(resource.uri);
       if (!resource.uri.startsWith(root) || resources.has(resource.uri) || !file || file.digest !== resource.digest || file.size !== resource.size) throw new ReleaseError("Skill manifest differs from release inventory");
-      if (inventory.schema_version === 2 && (file.path !== resource.uri.slice("skill://gisul/commons/".length) && (entry.origin !== "code" || !file.path.startsWith("code/")))) throw new ReleaseError("Shared resource path differs from its URI");
+      if (inventory.schema_version === 2 && (file.path !== resource.uri.slice("skill://portwright/commons/".length) && (entry.origin !== "code" || !file.path.startsWith("code/")))) throw new ReleaseError("Shared resource path differs from its URI");
       resources.add(resource.uri);
       referenced.add(resource.uri);
       size += resource.size;

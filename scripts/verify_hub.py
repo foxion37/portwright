@@ -44,7 +44,7 @@ EVIDENCE = ("HUB_VERIFY_CLOUDFLARE_TOKEN", "HUB_VERIFY_GITHUB_TOKEN",
             "HUB_VERIFY_ACCOUNT_ID", "HUB_VERIFY_COMMONS")
 POLL_SECONDS = 5
 TAIL_URL = "verify"
-PERSONAL_URI_PREFIX = "skill://gisul/portwright/personal/"
+PERSONAL_URI_PREFIX = "skill://portwright/personal/"
 
 
 class Blocked(Exception):
@@ -1277,7 +1277,7 @@ class Hub:
         uri = os.environ["HUB_VERIFY_OTHER_URI"]
         if (other_audience == self.hub or other_audience not in ("public", "personal", "company")
                 or not re.fullmatch(r"[a-f0-9]{40}", pin)
-                or not uri.startswith("skill://gisul/")):
+                or not uri.startswith("skill://portwright/")):
             raise Blocked("other-audience-evidence-invalid")
         if self.hub == "company" and other_audience != "public":
             raise Blocked("company-comparison-requires-public")

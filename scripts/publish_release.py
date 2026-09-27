@@ -41,10 +41,11 @@ sys.path.insert(0, str(ROOT / "lib"))
 from portwright import hub_contracts  # noqa: E402
 from portwright.doc_cache import NoRedirect  # noqa: E402
 
-AUDIENCE_SOURCE = {"personal": "portwright", "public": "commons", "company": "commons"}
+# URI base per audience: the personal release has no source segment (skill://portwright/personal/...).
+AUDIENCE_URI = {"personal": hub_contracts.URI_PREFIX, "public": hub_contracts.URI_PREFIX + "commons/", "company": hub_contracts.URI_PREFIX + "commons/"}
 SHARED_AUDIENCES = ("public", "company")
 GRADES = ("stable", "trial")
-LOCAL_FILES = {"inventory.json", "inventory.gisul.json", ".portwright-build"}
+LOCAL_FILES = {"inventory.json", "inventory.release.json", ".portwright-build"}
 COMMIT_RE = re.compile(r"[a-f0-9]{40}")
 SEGMENT_RE = re.compile(r"[A-Za-z0-9._~-]+")
 DIGEST_RE = re.compile(r"sha256:[a-f0-9]{64}")
@@ -251,12 +252,12 @@ def validate_v2_notes(out: Path, manifest: dict) -> None:
         payload = json.loads(data.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
         raise SystemExit("note-index.json is not valid JSON") from None
-    source = AUDIENCE_SOURCE[manifest["audience"]]
+    base = AUDIENCE_URI[manifest["audience"]]
     coverage = {
         "audience": manifest["audience"],
         "files": [{"path": item["path"], "digest": "sha256:" + item["sha256"], "size": item["size"]} for item in manifest["files"]],
         "skills": [
-            {"uri": f"skill://gisul/{source}/{skill['path'][: -len('SKILL.md')]}SKILL.md",
+            {"uri": f"{base}{skill['path'][: -len('SKILL.md')]}SKILL.md",
              "grade": skill.get("grade"), "note_refs": skill.get("note_refs", [])}
             for skill in manifest["skills"].values()
         ],
@@ -303,8 +304,8 @@ def verify_output(out: Path, manifest: dict) -> dict[str, bytes]:
     return objects
 
 
-def build_inventory(manifest: dict, objects: dict[str, bytes], commit: str, *, audience: str, source: str) -> tuple[dict, dict[str, bytes]]:
-    if audience not in AUDIENCE_SOURCE:
+def build_inventory(manifest: dict, objects: dict[str, bytes], commit: str, *, audience: str, base: str) -> tuple[dict, dict[str, bytes]]:
+    if audience not in AUDIENCE_URI:
         raise SystemExit(f"unknown audience: {audience}")
     if audience == "personal":
         if manifest.get("schema_version") == 2:
@@ -321,11 +322,11 @@ def build_inventory(manifest: dict, objects: dict[str, bytes], commit: str, *, a
         resources = []
         for relative in sorted(path for path in objects if path.startswith(root)):
             data = objects[relative]
-            uri = f"skill://gisul/{source}/{relative}"
+            uri = f"{base}{relative}"
             entry = {"uri": uri, "digest": sha(data), "size": len(data)}
             resources.append(entry)
             files.append({"path": relative, "digest": entry["digest"], "size": entry["size"], "uri": uri})
-        skill_uri = f"skill://gisul/{source}/{root}SKILL.md"
+        skill_uri = f"{base}{root}SKILL.md"
         if skill_uri not in {r["uri"] for r in resources}:
             raise SystemExit(f"{root}: missing SKILL.md")
         text = objects[f"{root}SKILL.md"].decode("utf-8")
@@ -431,16 +432,16 @@ def publish(out: Path, origin: str, token: str, audience: str, *, dry_run: bool 
     any refusal, so an uncertain result is never reported as success. A rerun whose
     pointer already carries this exact identity (commit, release, inventory_digest) is
     reported as promoted from the pointer alone, without uploading or re-promoting."""
-    if audience not in AUDIENCE_SOURCE:
+    if audience not in AUDIENCE_URI:
         raise SystemExit(f"unknown audience: {audience}")
     out = Path(out).resolve()
     manifest = validated_inventory(out)
     commit = manifest["commit"]
     objects = verify_output(out, manifest)
-    inventory, objects = build_inventory(manifest, objects, commit, audience=audience, source=AUDIENCE_SOURCE[audience])
+    inventory, objects = build_inventory(manifest, objects, commit, audience=audience, base=AUDIENCE_URI[audience])
     inventory_bytes = json.dumps(inventory, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     identity = {"commit": commit, "release": inventory["release"], "inventory_digest": sha(inventory_bytes)}
-    (out / "inventory.gisul.json").write_bytes(inventory_bytes)
+    (out / "inventory.release.json").write_bytes(inventory_bytes)
     result = {**identity, "audience": audience, "skills": len(inventory["skills"]), "objects": len(objects) + 1,
               "sequence": None, "promoted": False, "confirmed_via": None}
     if dry_run:
@@ -478,11 +479,11 @@ def publish(out: Path, origin: str, token: str, audience: str, *, dry_run: bool 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default=str(ROOT / "build" / "skill-bundles"))
-    parser.add_argument("--audience", choices=tuple(AUDIENCE_SOURCE), default=None)
+    parser.add_argument("--audience", choices=tuple(AUDIENCE_URI), default=None)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     audience = args.audience or os.environ.get("HUB_AUDIENCE", "")
-    if audience not in AUDIENCE_SOURCE:
+    if audience not in AUDIENCE_URI:
         print("--audience or HUB_AUDIENCE must be personal, public or company", file=sys.stderr)
         return 1
     try:

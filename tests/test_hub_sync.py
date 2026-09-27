@@ -35,7 +35,7 @@ def entry(name="acme", grade="stable", body="Shared procedure", kind="procedure"
     revision = hub_contracts.note_revision(kind, "acme", text, "https://docs.example.org/acme")
     text = text.replace(f"grade: {grade}\n", f"grade: {grade}\nrevision: {revision}\n")
     wire = dict(note_id=note_id, kind=kind, service_id="acme", revision=revision, grade=grade,
-                path=f"{grade}/acme/notes/{stem}.md", uri=f"skill://gisul/commons/{grade}/acme/notes/{stem}.md",
+                path=f"{grade}/acme/notes/{stem}.md", uri=f"skill://portwright/commons/{grade}/acme/notes/{stem}.md",
                 file_digest="sha256:" + hashlib.sha256(text.encode()).hexdigest(), size=len(text.encode()), text=text)
     return wire
 

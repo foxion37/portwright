@@ -66,7 +66,7 @@ def make_v2_out(root: Path, *, audience: str = "public", grade: str = "stable", 
         "schema_version": 1, "audience": audience, "commit": COMMIT,
         "notes": [{"note_id": note_id, "kind": "procedure", "service_id": "alpha", "revision": revision,
                    "grade": grade, "path": note_path,
-                   "uri": f"skill://gisul/commons/{note_path}", "file_digest": "sha256:" + sha256(NOTE_BYTES),
+                   "uri": f"skill://portwright/commons/{note_path}", "file_digest": "sha256:" + sha256(NOTE_BYTES),
                    "size": len(NOTE_BYTES)}],
     }
     index_bytes = (json.dumps(index, ensure_ascii=False, indent=2) + "\n").encode()
@@ -220,18 +220,18 @@ class TestManifestVerification(unittest.TestCase):
     def test_nested_personal_uri_and_frontmatter(self) -> None:
         manifest = pub.load_manifest(self.out)
         objects = pub.verify_output(self.out, manifest)
-        inventory, _ = pub.build_inventory(manifest, objects, COMMIT, audience="personal", source="portwright")
+        inventory, _ = pub.build_inventory(manifest, objects, COMMIT, audience="personal", base=pub.AUDIENCE_URI["personal"])
         personal = next(s for s in inventory["skills"] if "personal" in s["uri"])
-        self.assertEqual(personal["uri"], "skill://gisul/portwright/personal/my-skill/SKILL.md")
+        self.assertEqual(personal["uri"], "skill://portwright/personal/my-skill/SKILL.md")
         self.assertEqual(personal["frontmatter"]["name"], "my-skill")
         self.assertIs(personal["frontmatter"]["disable-model-invocation"], True)
         uris = {r["uri"] for r in personal["resources"]}
-        self.assertEqual(uris, {"skill://gisul/portwright/personal/my-skill/SKILL.md"})
+        self.assertEqual(uris, {"skill://portwright/personal/my-skill/SKILL.md"})
 
     def test_watch_sources_signed_without_uri(self) -> None:
         manifest = pub.load_manifest(self.out)
         objects = pub.verify_output(self.out, manifest)
-        inventory, objects = pub.build_inventory(manifest, objects, COMMIT, audience="personal", source="portwright")
+        inventory, objects = pub.build_inventory(manifest, objects, COMMIT, audience="personal", base=pub.AUDIENCE_URI["personal"])
         item = next(f for f in inventory["files"] if f["path"] == "watch-sources.json")
         self.assertNotIn("uri", item)
         self.assertEqual(item["digest"], "sha256:" + sha256(self.files["watch-sources.json"]))
@@ -243,7 +243,7 @@ class TestManifestVerification(unittest.TestCase):
     def test_v1_release_json_keeps_the_published_shape(self) -> None:
         manifest = pub.load_manifest(self.out)
         objects = pub.verify_output(self.out, manifest)
-        inventory, _ = pub.build_inventory(manifest, objects, COMMIT, audience="personal", source="portwright")
+        inventory, _ = pub.build_inventory(manifest, objects, COMMIT, audience="personal", base=pub.AUDIENCE_URI["personal"])
         item = next(f for f in inventory["files"] if f["path"] == "release.json")
         self.assertNotIn("uri", item)
         self.assertEqual(inventory["schema_version"], 1)
@@ -260,11 +260,11 @@ class TestSharedInventory(unittest.TestCase):
     def test_v2_inventory_preserves_grade_note_refs_and_note_index(self) -> None:
         manifest = pub.validated_inventory(self.out)
         objects = pub.verify_output(self.out, manifest)
-        inventory, objects = pub.build_inventory(manifest, objects, COMMIT, audience="public", source="commons")
+        inventory, objects = pub.build_inventory(manifest, objects, COMMIT, audience="public", base=pub.AUDIENCE_URI["public"])
         self.assertEqual(inventory["schema_version"], 2)
         self.assertEqual(inventory["audience"], "public")
         skill = inventory["skills"][0]
-        self.assertEqual(skill["uri"], "skill://gisul/commons/stable/alpha/SKILL.md")
+        self.assertEqual(skill["uri"], "skill://portwright/commons/stable/alpha/SKILL.md")
         self.assertEqual(skill["grade"], "stable")
         self.assertNotIn("origin", skill)  # the Hub reader refuses origin on commons packages
         self.assertEqual(skill["note_refs"], [{"note_id": "service/alpha", "revision": REVISION}])
@@ -298,7 +298,7 @@ class TestSharedInventory(unittest.TestCase):
         self.assertFalse(result["promoted"])
         self.assertIsNone(result["sequence"])
         self.assertEqual(result["audience"], "public")
-        released = json.loads((self.out / "inventory.gisul.json").read_text(encoding="utf-8"))
+        released = json.loads((self.out / "inventory.release.json").read_text(encoding="utf-8"))
         self.assertEqual(released["schema_version"], 2)
 
 
@@ -318,8 +318,7 @@ class TestTransportPolicy(unittest.TestCase):
             status, _, _ = pub.request("GET", "https://hub.test/admin/current", "t")
         self.assertEqual(status, 302)
 
-    def test_audience_is_required_and_routes_the_source(self) -> None:
-        self.assertEqual(pub.AUDIENCE_SOURCE, {"personal": "portwright", "public": "commons", "company": "commons"})
+    def test_audience_is_required(self) -> None:
         out = make_out(Path(tempfile.mkdtemp()), {"github/SKILL.md": skill_md("github")}, {"github": "github/SKILL.md"})
         code, _, stderr = run_main(out, FakeTransport(), env={}, argv=["--out", str(out)])
         self.assertEqual(code, 1)
@@ -420,7 +419,7 @@ class TestTransportPolicy(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(transport.calls, [])
         self.assertFalse(json.loads(stdout.strip())["promoted"])
-        self.assertTrue((out / "inventory.gisul.json").is_file())
+        self.assertTrue((out / "inventory.release.json").is_file())
 
     def test_missing_token_fails_before_any_request(self) -> None:
         transport = FakeTransport()

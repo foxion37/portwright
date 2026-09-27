@@ -343,7 +343,7 @@ class Wire:
         return rows[0] if rows else None
 
     def uri(self, note_id, revision, grade="trial"):
-        return f"skill://gisul/commons/{grade}/github/notes/{note_id.split('/', 1)[1]}.md"
+        return f"skill://portwright/commons/{grade}/github/notes/{note_id.split('/', 1)[1]}.md"
 
     def sync_payload(self, query):
         trial = (query.get("include_trial") or ["false"])[-1] == "true"
@@ -359,7 +359,7 @@ class Wire:
             notes.append({"note_id": row["note_id"], "revision": row["revision"],
                           "kind": "lesson", "service_id": row["service_id"],
                           "grade": row["grade"], "uri": uri,
-                          "path": uri.removeprefix("skill://gisul/commons/"),
+                          "path": uri.removeprefix("skill://portwright/commons/"),
                           "file_digest": hc.sha256_digest(text), "size": len(text.encode()), "text": text})
         notes.sort(key=lambda note: (note["note_id"], note["revision"]))
         entries = [{"note_id": row["note_id"], "revision": row["revision"]}
@@ -1347,7 +1347,7 @@ class VerifyHubTest(unittest.TestCase):
 
     def test_directory_not_found_after_recall_can_hide_the_old_package(self):
         runner = self.module.Hub.__new__(self.module.Hub)
-        target = "skill://gisul/commons/trial/github/notes/target.md"
+        target = "skill://portwright/commons/trial/github/notes/target.md"
         sibling = target.replace("target.md", "sibling.md")
         visible = [target, sibling]
         runner.rpc = lambda *args: (200, {"result": {
@@ -1683,7 +1683,7 @@ for await (const line of createInterface({input:process.stdin})) {
         approved = {"name": "example", "files": [
             {"path": "SKILL.md", "sha256": "a" * 64, "bytes": 123},
             {"path": "notes.md", "sha256": "b" * 64, "bytes": 45}]}
-        prefix = "skill://gisul/portwright/personal/example/"
+        prefix = "skill://portwright/personal/example/"
         entry = {"uri": prefix + "SKILL.md",
                  "frontmatter": {"name": "example", "description": "A skill"},
                  "resources": [
@@ -1928,7 +1928,7 @@ for await (const line of createInterface({input:process.stdin})) {
         runner = self.module.Hub.__new__(self.module.Hub)
         runner.hub = "public"
         base = {"HUB_OTHER_ORIGIN": "https://other.test", "HUB_VERIFY_OTHER_AUDIENCE": "personal",
-                "HUB_VERIFY_OTHER_OLD_PIN": "a" * 40, "HUB_VERIFY_OTHER_URI": "skill://gisul/other/x"}
+                "HUB_VERIFY_OTHER_OLD_PIN": "a" * 40, "HUB_VERIFY_OTHER_URI": "skill://portwright/other/x"}
         with patch.dict(os.environ, dict(base, HUB_VERIFY_OTHER_OLD_PIN="not-a-pin")):
             with self.assertRaises(self.module.Blocked):
                 runner.scenario_isolation()
