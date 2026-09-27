@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-09-27
+### Changed
+- **Breaking:** skill URIs move from `skill://gisul/` to `skill://portwright/`. Personal releases drop the old `portwright` source segment (`skill://portwright/personal/<name>/SKILL.md`), and shared releases use `skill://portwright/commons/...`. Workers and clients accept only the new host. Releases published earlier cannot be read or pinned, and clients before 3.0.0 cannot sync a 3.0.0 release.
+- The builder's local release copy is renamed from `inventory.gisul.json` to `inventory.release.json`.
+- The `io.gisul/commit` pin key is unchanged.
+
 ## [2.2.3] - 2026-09-26
 ### Changed
 - Lesson submissions are judged on whether the official document covers the same service feature without contradicting the note. They are no longer judged on whether it "substantively supports" the note. Procedures keep the original question.
@@ -168,3 +174,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [2.2.1]: ../../releases/tag/v2.2.1
 [2.2.2]: ../../releases/tag/v2.2.2
 [2.2.3]: ../../releases/tag/v2.2.3
+[3.0.0]: ../../releases/tag/v3.0.0

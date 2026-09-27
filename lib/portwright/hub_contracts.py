@@ -34,7 +34,7 @@ TRIAL_DIR = "trial"
 SERVICE_DIR = "services"
 FAILURE_DIR = "failures"
 COMMONS_SOURCE = "commons"
-URI_PREFIX = "skill://gisul/"
+URI_PREFIX = "skill://portwright/"
 
 # Server-owned scalars: rewritten by the server, never part of the revision.
 SERVER_FIELDS = (

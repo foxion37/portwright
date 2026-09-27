@@ -5,7 +5,7 @@
   "release": "fixture.shared",
   "skills": [
     {
-      "uri": "skill://gisul/commons/stable/example/SKILL.md",
+      "uri": "skill://portwright/commons/stable/example/SKILL.md",
       "frontmatter": {
         "name": "example",
         "description": "stable example notes",
@@ -23,17 +23,17 @@
       },
       "resources": [
         {
-          "uri": "skill://gisul/commons/stable/example/SKILL.md",
+          "uri": "skill://portwright/commons/stable/example/SKILL.md",
           "digest": "sha256:b77a7b4567afddce36746a2c0704690ef08fd4958bc6de7e54fe6e4b610c0a77",
           "size": 329
         },
         {
-          "uri": "skill://gisul/commons/stable/example/notes/anchor.md",
+          "uri": "skill://portwright/commons/stable/example/notes/anchor.md",
           "digest": "sha256:53825fe72948d3e47aefb11202d0542ebf5a3ec9145011c99701e906b88fd4b5",
           "size": 131
         },
         {
-          "uri": "skill://gisul/commons/stable/example/notes/recalled.md",
+          "uri": "skill://portwright/commons/stable/example/notes/recalled.md",
           "digest": "sha256:fbfb6a0d55ba4dfc70a623f995a686b6558bbdd4b93308be73553e82ffe9131f",
           "size": 135
         }
@@ -51,7 +51,7 @@
       ]
     },
     {
-      "uri": "skill://gisul/commons/trial/example/SKILL.md",
+      "uri": "skill://portwright/commons/trial/example/SKILL.md",
       "frontmatter": {
         "name": "example",
         "description": "trial example notes",
@@ -65,12 +65,12 @@
       },
       "resources": [
         {
-          "uri": "skill://gisul/commons/trial/example/SKILL.md",
+          "uri": "skill://portwright/commons/trial/example/SKILL.md",
           "digest": "sha256:a6dd4b7c74d3a38f932a3bcf02b2be54aa647c798a5e13dbc44611c6b9b80da9",
           "size": 213
         },
         {
-          "uri": "skill://gisul/commons/trial/example/notes/candidate.md",
+          "uri": "skill://portwright/commons/trial/example/notes/candidate.md",
           "digest": "sha256:5c6cd9d1b1d90a0f8f818755d247725be943709350a73f62522352fbc5e4625b",
           "size": 136
         }
@@ -89,50 +89,50 @@
       "path": "stable/example/SKILL.md",
       "digest": "sha256:b77a7b4567afddce36746a2c0704690ef08fd4958bc6de7e54fe6e4b610c0a77",
       "size": 329,
-      "uri": "skill://gisul/commons/stable/example/SKILL.md"
+      "uri": "skill://portwright/commons/stable/example/SKILL.md"
     },
     {
       "path": "stable/example/notes/anchor.md",
       "digest": "sha256:53825fe72948d3e47aefb11202d0542ebf5a3ec9145011c99701e906b88fd4b5",
       "size": 131,
-      "uri": "skill://gisul/commons/stable/example/notes/anchor.md"
+      "uri": "skill://portwright/commons/stable/example/notes/anchor.md"
     },
     {
       "path": "stable/example/notes/recalled.md",
       "digest": "sha256:fbfb6a0d55ba4dfc70a623f995a686b6558bbdd4b93308be73553e82ffe9131f",
       "size": 135,
-      "uri": "skill://gisul/commons/stable/example/notes/recalled.md"
+      "uri": "skill://portwright/commons/stable/example/notes/recalled.md"
     },
     {
       "path": "trial/example/SKILL.md",
       "digest": "sha256:a6dd4b7c74d3a38f932a3bcf02b2be54aa647c798a5e13dbc44611c6b9b80da9",
       "size": 213,
-      "uri": "skill://gisul/commons/trial/example/SKILL.md"
+      "uri": "skill://portwright/commons/trial/example/SKILL.md"
     },
     {
       "path": "trial/example/notes/candidate.md",
       "digest": "sha256:5c6cd9d1b1d90a0f8f818755d247725be943709350a73f62522352fbc5e4625b",
       "size": 136,
-      "uri": "skill://gisul/commons/trial/example/notes/candidate.md"
+      "uri": "skill://portwright/commons/trial/example/notes/candidate.md"
     },
     {
       "path": "note-index.json",
-      "digest": "sha256:2f744fbab9720f41f24d2956b9758a95375dca9c0ef9f4e26890fbfdd10973da",
-      "size": 1234
+      "digest": "sha256:4df41a3fdad753bf445d0c1009bd4620e6c8780d3e1a3eddaa545eb55074a3d7",
+      "size": 1249
     },
     {
       "path": "release.json",
-      "digest": "sha256:13fa325ad1faf21fa353f620888a5f9e7e133a9f2580f85d94c6f3e6e58f0e2e",
-      "size": 387
+      "digest": "sha256:6495f6d7ad5c3537832d042183ce54d31ff401254fbfe322697636e59abbb716",
+      "size": 397
     }
   ],
   "note_index": {
     "path": "note-index.json",
-    "digest": "sha256:2f744fbab9720f41f24d2956b9758a95375dca9c0ef9f4e26890fbfdd10973da",
-    "size": 1234
+    "digest": "sha256:4df41a3fdad753bf445d0c1009bd4620e6c8780d3e1a3eddaa545eb55074a3d7",
+    "size": 1249
   },
   "aliases": {
-    "skill://gisul/alias/stable/SKILL.md": "skill://gisul/commons/stable/example/SKILL.md",
-    "skill://gisul/alias/trial/SKILL.md": "skill://gisul/commons/trial/example/SKILL.md"
+    "skill://portwright/alias/stable/SKILL.md": "skill://portwright/commons/stable/example/SKILL.md",
+    "skill://portwright/alias/trial/SKILL.md": "skill://portwright/commons/trial/example/SKILL.md"
   }
 }

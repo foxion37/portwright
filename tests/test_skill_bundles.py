@@ -361,7 +361,7 @@ class TestSharedBuild(SharedCase):
         for note in index["notes"]:
             self.assertEqual(files[note["path"]]["sha256"], note["file_digest"].split(":", 1)[1])
             self.assertEqual(files[note["path"]]["size"], note["size"])
-            self.assertTrue(note["uri"].startswith("skill://gisul/commons/"))
+            self.assertTrue(note["uri"].startswith("skill://portwright/commons/"))
         self.assertEqual(hub_contracts.validate_note_index(index)["ok"], True)
         for name, skill in json.loads((self.out / "inventory.json").read_text())["skills"].items():
             grade, service = name.split("/")
@@ -488,10 +488,10 @@ class TestH1WireContract(SharedCase):
     def wire(self) -> tuple[str, dict, dict[str, bytes]]:
         self.build()
         result = publish_release.publish(self.out, "", "", "public", dry_run=True)
-        text = (self.out / "inventory.gisul.json").read_text(encoding="utf-8")
+        text = (self.out / "inventory.release.json").read_text(encoding="utf-8")
         manifest = publish_release.validated_inventory(self.out)
         _, objects = publish_release.build_inventory(
-            manifest, publish_release.verify_output(self.out, manifest), result["commit"], audience="public", source="commons")
+            manifest, publish_release.verify_output(self.out, manifest), result["commit"], audience="public", base=publish_release.AUDIENCE_URI["public"])
         return text, json.loads(text), objects
 
     def test_wire_inventory_matches_h1_fixture_shape(self) -> None:
@@ -505,14 +505,14 @@ class TestH1WireContract(SharedCase):
         self.assertEqual({frozenset(entry) for entry in inventory["files"]}, {frozenset(entry) for entry in fixture["files"]})
         for skill in inventory["skills"]:
             self.assertNotIn("origin", skill)
-            self.assertTrue(skill["uri"].startswith(f"skill://gisul/commons/{skill['grade']}/"))
+            self.assertTrue(skill["uri"].startswith(f"skill://portwright/commons/{skill['grade']}/"))
             self.assertTrue(skill["note_refs"])
         for entry in inventory["files"]:
             data = objects[entry["path"]]
             self.assertEqual((entry["digest"], entry["size"]), ("sha256:" + sha256(data), len(data)))
             if "uri" in entry:
                 self.assertRegex(entry["path"], r"^(stable|trial)/")
-                self.assertEqual(entry["uri"], "skill://gisul/commons/" + entry["path"])
+                self.assertEqual(entry["uri"], "skill://portwright/commons/" + entry["path"])
             else:
                 self.assertIn(entry["path"], {"note-index.json", "release.json"})
         listed = next(entry for entry in inventory["files"] if entry["path"] == "note-index.json")

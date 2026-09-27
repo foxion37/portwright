@@ -383,7 +383,7 @@ def build_shared(out: Path, content_root: Path, audience: str, withheld: frozens
                 index_notes.append({
                     "note_id": note["note_id"], "kind": note["wire_kind"], "service_id": service_id,
                     "revision": note["revision"], "grade": grade, "path": path,
-                    "uri": f"skill://gisul/{NOTE_URI_SOURCE}/{path}",
+                    "uri": f"{hub_contracts.URI_PREFIX}{NOTE_URI_SOURCE}/{path}",
                     "file_digest": note["digest"], "size": note["size"],
                 })
             manifest[root] = {

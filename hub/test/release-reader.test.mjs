@@ -61,7 +61,7 @@ test('shared v1 and personal v2 are rejected, not silently treated as stable', a
 });
 
 test('v1 personal inventory remains readable without a grade or note index', () => {
-  const path='personal/demo/SKILL.md', uri='skill://gisul/personal/demo/SKILL.md';
+  const path='personal/demo/SKILL.md', uri='skill://portwright/personal/demo/SKILL.md';
   const legacy={schema_version:1,commit:inventory.commit,release:'personal.old',skills:[{uri,frontmatter:{name:'demo',description:'Private demo'},resources:[{uri,size:3,digest:'sha256:'+'a'.repeat(64)}]}],files:[{path,uri,size:3,digest:'sha256:'+'a'.repeat(64)}],aliases:{}};
   const snapshot=parseInventory(JSON.stringify(legacy),{...identity,release:legacy.release},'personal');
   assert.equal(snapshot.inventory.skills[0].uri,uri);
@@ -80,7 +80,7 @@ test('shared inventory refuses orphan note index and a forged personal origin', 
 });
 
 test('personal v1 release is served from its own current pointer', async t => {
-  const bucket=await fixture(t), commit='c'.repeat(40), uri='skill://gisul/personal/demo/SKILL.md';
+  const bucket=await fixture(t), commit='c'.repeat(40), uri='skill://portwright/personal/demo/SKILL.md';
   const content='---\nname: demo\ndescription: Private demo\n---\n\nPrivate\n';
   const f=await putImmutableObject(bucket,commit,'personal/demo/SKILL.md',new TextEncoder().encode(content).buffer);
   const legacy={schema_version:1,commit,release:'personal.old',skills:[{uri,frontmatter:{name:'demo',description:'Private demo'},resources:[{uri,digest:f.digest,size:f.size}]}],files:[{path:'personal/demo/SKILL.md',uri,digest:f.digest,size:f.size}],aliases:{}};
@@ -102,22 +102,22 @@ test('default, trial opt-in, direct URI, aliases and pinned reads share visibili
   assert.match(text.text, /anchor content/);
   await assert.rejects(readNoteResource(bucket, stable, 'service/recalled'), e => e.status === 410);
   await assert.rejects(readResource(bucket, stable, inventory.skills[0].uri), e => e.status === 410);
-  assert.throws(() => resolveAlias(stable.inventory, 'skill://gisul/alias/trial/SKILL.md'), e => e.status === 404);
+  assert.throws(() => resolveAlias(stable.inventory, 'skill://portwright/alias/trial/SKILL.md'), e => e.status === 404);
   await assert.rejects(readResource(bucket,stable,inventory.skills[1].uri),e=>e.status===404);
   await assert.rejects(readNoteResource(bucket,stable,'service/candidate'),e=>e.status===404);
   const trial = await visibleSnapshot(bucket, { audience: 'public', includeTrial: true, pin: inventory.commit });
   assert.deepEqual(trial.inventory.skills.map(s => s.grade), ['trial']);
-  assert.equal(resolveAlias(trial.inventory, 'skill://gisul/alias/trial/SKILL.md'), inventory.skills[1].uri);
+  assert.equal(resolveAlias(trial.inventory, 'skill://portwright/alias/trial/SKILL.md'), inventory.skills[1].uri);
   assert.match((await readResource(bucket, trial, inventory.skills[1].uri)).text, /trial example/);
-  assert.deepEqual(readDirectory(trial, 'skill://gisul/commons/trial/example').map(x=>x.name), ['SKILL.md','notes']);
+  assert.deepEqual(readDirectory(trial, 'skill://portwright/commons/trial/example').map(x=>x.name), ['SKILL.md','notes']);
   assert.deepEqual(trial.visibleNotes.map(n=>n.note_id), ['service/anchor','service/candidate']);
   const chained=structuredClone(inventory);
-  chained.aliases['skill://gisul/alias/chain/SKILL.md']='skill://gisul/alias/trial/SKILL.md';
+  chained.aliases['skill://portwright/alias/chain/SKILL.md']='skill://portwright/alias/trial/SKILL.md';
   const changedText=JSON.stringify(chained), changedIdentity={...identity,inventory_digest:await sha256(changedText)};
   await bucket.put(releaseKey(inventory.commit,'inventory.json'),changedText);
   await bucket.put(releaseKey(inventory.commit,'complete.json'),JSON.stringify(changedIdentity));
   const chainedSnapshot=await visibleSnapshot(bucket,{audience:'public',includeTrial:true,pin:inventory.commit});
-  assert.equal(resolveAlias(chainedSnapshot.inventory,'skill://gisul/alias/chain/SKILL.md'),inventory.skills[1].uri);
+  assert.equal(resolveAlias(chainedSnapshot.inventory,'skill://portwright/alias/chain/SKILL.md'),inventory.skills[1].uri);
   await bucket.put(releaseKey(inventory.commit,'inventory.json'),inventoryText);
   await bucket.put(releaseKey(inventory.commit,'complete.json'),JSON.stringify(identity));
   await bucket.put('recalls/current.json', JSON.stringify({...recalls,sequence:2,entries:[...recalls.entries,{note_id:'service/candidate',revision:inventory.skills[1].note_refs[0].revision}]}));
