@@ -9,11 +9,15 @@ No credentials, note bodies or provider errors are printed.
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
+import traceback
+import urllib.error
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "lib"))
@@ -25,6 +29,29 @@ from portwright.hub_pipeline import PipelineError
 
 IDENTIFIERS = identifier_patterns(json.loads(
     (ROOT / "install" / "identifier-policy.json").read_text(encoding="utf-8"))["patterns"])
+
+
+# Only fixed reason literals from this code (lowercase words joined by "_"): never message text.
+_REASON = re.compile(r"[a-z]+(?:_[a-z]+)+")
+
+
+def failure_line(error: BaseException) -> str:
+    """One secret-safe diagnostic: exception type, a fixed reason code, and the code location."""
+    parts = [type(error).__name__]
+    if isinstance(error, urllib.error.HTTPError):
+        parts.append(f"http_{error.code}")
+    elif isinstance(error, urllib.error.URLError):
+        parts.append(type(error.reason).__name__)
+    elif isinstance(error, subprocess.CalledProcessError):
+        parts.append(f"exit_{error.returncode}")
+    elif isinstance(error, OSError) and error.errno is not None:
+        parts.append(errno.errorcode.get(error.errno, "errno"))
+    elif error.args and isinstance(error.args[0], str) and _REASON.fullmatch(error.args[0]):
+        parts.append(error.args[0])
+    frames = [frame for frame in traceback.extract_tb(error.__traceback__)
+              if Path(frame.filename).resolve().is_relative_to(ROOT)]
+    where = f" at {Path(frames[-1].filename).resolve().relative_to(ROOT)}:{frames[-1].lineno} {frames[-1].name}" if frames else ""
+    return "HUB_PIPELINE_FAILED " + ":".join(parts) + where
 
 
 def _public_url(value: object) -> str:
@@ -116,8 +143,8 @@ def main(argv: list[str] | None = None) -> int:
                                   retry_held=args.retry_held, recall_only=args.recall_only)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True, allow_nan=False))
         return int(bool(result.get("errors")))
-    except (OSError, ValueError, RuntimeError, PipelineError, subprocess.SubprocessError):
-        print("HUB_PIPELINE_FAILED", file=sys.stderr)
+    except (OSError, ValueError, RuntimeError, PipelineError, subprocess.SubprocessError) as error:
+        print(failure_line(error), file=sys.stderr)
         return 1
 
 
