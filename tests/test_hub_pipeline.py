@@ -2700,6 +2700,51 @@ class LifecycleProgressionTests(CliIntegrationTests):
         self.assertEqual(starved["commit"], head_before)
 
 
+class CliFailureLineTests(unittest.TestCase):
+    """A failed writer run names the error kind and code location, never its message text."""
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("parent_hub_cli_failure", ROOT / "scripts" / "hub_pipeline.py")
+        self.cli = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.cli)
+
+    def run_failing(self, error: BaseException) -> str:
+        import contextlib
+        import io
+
+        def raise_error(*args, **kwargs):
+            raise error
+
+        stderr = io.StringIO()
+        argv = ["--commons", "/nonexistent", "--audience", "public"]
+        with patch.object(hp, "run_pipeline", raise_error), contextlib.redirect_stderr(stderr):
+            self.assertEqual(self.cli.main(argv), 1)
+        return stderr.getvalue().strip()
+
+    def test_reason_codes_and_location_are_reported(self):
+        import errno
+        import urllib.error
+
+        line = self.run_failing(hp.PipelineError("paging_incomplete"))
+        self.assertRegex(line, r"^HUB_PIPELINE_FAILED PipelineError:paging_incomplete at tests/test_hub_pipeline\.py:\d+ raise_error$")
+        http = urllib.error.HTTPError("https://hub.test/admin/intake?token=x", 503, "Service Unavailable", {}, None)
+        self.assertTrue(self.run_failing(http).startswith("HUB_PIPELINE_FAILED HTTPError:http_503 at "))
+        self.assertTrue(self.run_failing(ConnectionResetError(errno.ECONNRESET, "reset")).startswith(
+            "HUB_PIPELINE_FAILED ConnectionResetError:ECONNRESET at "))
+        self.assertTrue(self.run_failing(subprocess.CalledProcessError(128, ["git", "push"])).startswith(
+            "HUB_PIPELINE_FAILED CalledProcessError:exit_128 at "))
+
+    def test_free_text_messages_never_reach_the_line(self):
+        # Built at runtime so no scanner treats the fixture as a real credential.
+        secret = "ghp_" + "a1B2" * 9
+        for error in (ValueError(f"bad token {secret}"), RuntimeError(secret), ValueError("abcdefghijklmnopqrstuvwxyz")):
+            with self.subTest(error=type(error).__name__):
+                line = self.run_failing(error)
+                self.assertNotIn(secret, line)
+                self.assertNotIn("abcdefghijklmnopqrstuvwxyz", line)
+                self.assertRegex(line, rf"^HUB_PIPELINE_FAILED {type(error).__name__} at ")
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -47,6 +47,7 @@ The original personal v1 avoided a governance gateway and org-scale infrastructu
 | PII masking of regulated data | No regulated data may flow through the planned submission path | A separately approved regulated stage |
 | Self-hosted Composio | Managed connection backends remain independent of the Hub | A regulated stage requires data residency |
 | Publish the `services/`+`failures/` schema as a standard | First validate shared use of the derive-on-miss cache | After the company stage |
+| Automatic document-change monitoring (fetch → digest → model judgment → GitHub Issue) | The M2 design dropped it: it would need `issues: write` in commons and its own model budget. The old personal Worker's cron was deleted on 2026-09-26; procedures are re-derived from current docs at instruct time instead (rule 3) | Stale procedures slip past verify-at-instruct in practice |
 
 ---
 

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-09-28
+### Fixed
+- A failed commons writer run now prints `HUB_PIPELINE_FAILED <ErrorType>[:<reason>] at <file>:<line> <function>` instead of a bare `HUB_PIPELINE_FAILED`. The reason is a fixed code only: a `PipelineError` code, an HTTP status, an errno name, or a process exit code. Message text is never printed, so a failed run can be diagnosed without exposing values.
+
+### Removed
+- Document monitoring is recorded as removed (M2 design §A). The personal Worker's daily watch cron was deleted together with that Worker. An official-page change raises no alert; procedures are re-derived from current docs at instruct time. `FUTURE.md` lists it as a deferred capability.
+
 ## [3.0.0] - 2026-09-27
 ### Changed
 - **Breaking:** skill URIs move from `skill://gisul/` to `skill://portwright/`. Personal releases drop the old `portwright` source segment (`skill://portwright/personal/<name>/SKILL.md`), and shared releases use `skill://portwright/commons/...`. Workers and clients accept only the new host. Releases published earlier cannot be read or pinned, and clients before 3.0.0 cannot sync a 3.0.0 release.
@@ -175,3 +182,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [2.2.2]: ../../releases/tag/v2.2.2
 [2.2.3]: ../../releases/tag/v2.2.3
 [3.0.0]: ../../releases/tag/v3.0.0
+[3.0.1]: ../../releases/tag/v3.0.1
