@@ -155,7 +155,7 @@ export async function directFetch(request: Request, env: HubEnv, auth: AuthConte
   if (!['skills/list', 'skills/get', 'resources/list', 'resources/read', 'resources/directory/read'].includes(rpc.method)) return rpcError(request, rpc.id, -32601, 'METHOD_NOT_FOUND', modern ? 404 : 200);
   try {
     if (params._meta !== undefined && !object(params._meta)) throw new ReleaseError('Invalid request metadata', 400);
-    const pin = meta['io.gisul/commit'];
+    const pin = meta['io.portwright/commit'];
     if (pin !== undefined && (typeof pin !== 'string' || !/^[a-f0-9]{40}$/.test(pin))) throw new ReleaseError('Invalid pin', 400);
     const snapshot = await visibleSnapshot(env.SKILLS_BUCKET, { audience: env.HUB_AUDIENCE, pin, includeTrial: meta['io.portwright/include_trial'] === true });
     const _meta = { release: snapshot.identity.release, commit: snapshot.identity.commit };

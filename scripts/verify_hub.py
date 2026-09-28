@@ -1287,7 +1287,7 @@ class Hub:
         require(code in (401, 403), "cross-audience-list")
         code, _ = self.rpc("resources/read", {"uri": uri}, "read", origin=other)
         require(code in (401, 403), "cross-audience-direct")
-        code, _ = self.rpc("resources/read", {"uri": uri, "_meta": {"io.gisul/commit": pin}},
+        code, _ = self.rpc("resources/read", {"uri": uri, "_meta": {"io.portwright/commit": pin}},
                            "read", origin=other)
         require(code in (401, 403), "cross-audience-old-pin")
         code, _ = self.request("GET", "/sync", "other")
@@ -1311,7 +1311,7 @@ class Hub:
                     "company-fell-back-to-public")
         code, _ = self.request("GET", "/admin/current", "read")
         require(code in (401, 403), "read-token-admin-access")
-        meta = {"uri": uri, "_meta": {"io.gisul/commit": pin}}
+        meta = {"uri": uri, "_meta": {"io.portwright/commit": pin}}
         code, result = self.rpc("resources/read", meta, "read")
         require(code in (404, 410) or (isinstance(result, dict)
                 and (result.get("error") or result.get("result", {}).get("isError"))),
@@ -1695,7 +1695,7 @@ class Hub:
             raise Blocked("recall-directory-baseline-missing")
         code, directory = self.rpc("resources/directory/read", {
             "uri": uri.rsplit("/", 1)[0], "_meta": {
-                "io.gisul/commit": pin, "io.portwright/include_trial": True}}, "read")
+                "io.portwright/commit": pin, "io.portwright/include_trial": True}}, "read")
         if recalled and isinstance(directory, dict) and directory.get("error", {}).get("message") == "NOT_FOUND":
             # §7.3 hides the whole pinned package when it contains a recalled note.
             # The sibling is checked in the *current* release, not the old pin.
@@ -1774,7 +1774,7 @@ class Hub:
             require((note_id, new["revision"]) in pairs, "new-revision-hidden")
             require(other_pair in pairs, "recall-other-note-hidden")
             code, result = self.rpc("resources/read", {"uri": target["uri"], "_meta": {
-                        "io.gisul/commit": pin, "io.portwright/include_trial": True}}, "read")
+                        "io.portwright/commit": pin, "io.portwright/include_trial": True}}, "read")
             require(code == 410 or "REVISION_RECALLED" in json.dumps(result),
                     "direct-recall-missing")
             self.check_directory(target["uri"], pin, recalled=True, remaining=remaining)
@@ -1898,7 +1898,7 @@ class Hub:
         marker = recall_path(note_id, revision)
         self.git("show", "FETCH_HEAD:" + marker)
         code, result = self.rpc("resources/read", {"uri": target["uri"], "_meta": {
-                "io.gisul/commit": pin, "io.portwright/include_trial": True}}, "read")
+                "io.portwright/commit": pin, "io.portwright/include_trial": True}}, "read")
         require(code == 410 or "REVISION_RECALLED" in json.dumps(result),
                 "budget-pinned-recall-missing")
 

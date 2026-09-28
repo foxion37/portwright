@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-09-28
+### Added
+- `portwright skills serve`: the stdio MCP server `portwright-skills`, in the Python standard library. It has five tools (`search_skills`, `load_skill`, `read_skill_file`, `create_skill`, `update_skill`) over local skill folders and the personal registry. Local skills are `skill://portwright/local/<folder>/<path>`. Every remote file is digest-verified when read, and writes are local-only, digest-guarded, locked and atomic. It replaces the gisul local server and bridge.
+- `portwright skills status` and `portwright skills stage <name>` (private repository only): report changed, missing and unapproved personal skills, and prepare a screened pull request that updates one approved copy.
+
+### Changed
+- **Breaking:** the release pin key is `io.portwright/commit`; Workers ignore `io.gisul/commit`.
+- `local` is a reserved bundle name.
+- `mcp.run_stdio` is the shared stdio JSON-RPC loop for `portwright mcp` and `portwright skills serve`.
+
 ## [3.0.1] - 2026-09-28
 ### Fixed
 - A failed commons writer run now prints `HUB_PIPELINE_FAILED <ErrorType>[:<reason>] at <file>:<line> <function>` instead of a bare `HUB_PIPELINE_FAILED`. The reason is a fixed code only: a `PipelineError` code, an HTTP status, an errno name, or a process exit code. Message text is never printed, so a failed run can be diagnosed without exposing values.
@@ -183,3 +193,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [2.2.3]: ../../releases/tag/v2.2.3
 [3.0.0]: ../../releases/tag/v3.0.0
 [3.0.1]: ../../releases/tag/v3.0.1
+[4.0.0]: ../../releases/tag/v4.0.0
