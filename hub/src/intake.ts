@@ -373,13 +373,17 @@ export async function listIntake(input: { state?: string; after?: string; limit?
   if (params.state !== undefined && INTENT_STATES[params.state as string] !== true) throw invalid();
   const limit = assertLimit(params.limit, 20, 20);
   const cursor = decodeCursor(params.after);
+  // Only the filters in use enter the SQL: "?x IS NULL OR …" keeps SQLite off the indexes (full scans, 2026-09-28).
+  const where = ["EXISTS(SELECT 1 FROM tokens t WHERE t.hash = i.token_hash AND t.org = ?1)"];
+  const binds: unknown[] = [context.org, unixNow()];
+  if (params.state !== undefined) { binds.push(params.state); where.push(`i.state = ?${binds.length}`); }
+  if (cursor) { binds.push(cursor.created, cursor.id); where.push(`(i.created > ?${binds.length - 1} OR (i.created = ?${binds.length - 1} AND i.id > ?${binds.length}))`); }
+  binds.push(limit + 1);
   const rows = await context.db.prepare(
     "SELECT i.id, i.token_hash, i.lineage_id, i.request_id, i.request_digest, i.kind, i.service_id, i.target_note_id, i.expected_revision, i.body, i.doc_url, i.success_evidence, i.state, i.reason_code, i.note_id, i.revision, i.gate_digest, i.commit_sha, i.published_commit, i.created, i.updated, i.day, " +
     "EXISTS(SELECT 1 FROM tokens t WHERE t.hash = i.token_hash AND t.org = ?1 AND t.revoked = 0 AND t.expires > ?2) AS eligible " +
-    "FROM intake AS i WHERE EXISTS(SELECT 1 FROM tokens t WHERE t.hash = i.token_hash AND t.org = ?1) " +
-    "AND (?3 IS NULL OR i.state = ?3) AND (?4 IS NULL OR i.created > ?4 OR (i.created = ?4 AND i.id > ?5)) " +
-    "ORDER BY i.created, i.id LIMIT ?6",
-  ).bind(context.org, unixNow(), params.state ?? null, cursor?.created ?? null, cursor?.id ?? null, limit + 1)
+    `FROM intake AS i WHERE ${where.join(" AND ")} ORDER BY i.created, i.id LIMIT ?${binds.length}`,
+  ).bind(...binds)
     .all<Record<string, unknown>>();
   const page = (rows.results ?? []).slice(0, limit);
   const items = page.map(row => ({
@@ -411,15 +415,17 @@ export async function listEvents(input: { note_id?: string; revision?: string; k
   const revision = hasNote ? assertRevision(params.revision) : null;
   const limit = assertLimit(params.limit, 100, 100);
   const cursor = decodeCursor(params.after);
+  const where = ["EXISTS(SELECT 1 FROM tokens t WHERE t.hash = e.token_hash AND t.org = ?1)"];
+  const binds: unknown[] = [context.org, unixNow()];
+  if (noteId !== null) { binds.push(noteId, revision); where.push(`e.note_id = ?${binds.length - 1} AND e.revision = ?${binds.length}`); }
+  if (kind !== null) { binds.push(kind); where.push(`e.kind = ?${binds.length}`); }
+  if (cursor) { binds.push(cursor.created, cursor.id); where.push(`(e.created > ?${binds.length - 1} OR (e.created = ?${binds.length - 1} AND e.id > ?${binds.length}))`); }
+  binds.push(limit + 1);
   const rows = await context.db.prepare(
     "SELECT e.id, e.intake_id, e.note_id, e.revision, e.lineage_id, e.token_hash, e.kind, e.action, e.operation_id, e.value, e.payload, e.month, e.created, e.day, " +
     "EXISTS(SELECT 1 FROM tokens t WHERE t.hash = e.token_hash AND t.org = ?1 AND t.revoked = 0 AND t.expires > ?2) AS eligible " +
-    "FROM events AS e WHERE EXISTS(SELECT 1 FROM tokens t WHERE t.hash = e.token_hash AND t.org = ?1) " +
-    "AND (?3 IS NULL OR (e.note_id = ?3 AND e.revision = ?4)) " +
-    "AND (?5 IS NULL OR e.created > ?5 OR (e.created = ?5 AND e.id > ?6)) " +
-    "AND (?8 IS NULL OR e.kind = ?8) " +
-    "ORDER BY e.created, e.id LIMIT ?7",
-  ).bind(context.org, unixNow(), noteId, revision, cursor?.created ?? null, cursor?.id ?? null, limit + 1, kind)
+    `FROM events AS e WHERE ${where.join(" AND ")} ORDER BY e.created, e.id LIMIT ?${binds.length}`,
+  ).bind(...binds)
     .all<Record<string, unknown>>();
   const page = (rows.results ?? []).slice(0, limit);
   const items = page.map(row => ({

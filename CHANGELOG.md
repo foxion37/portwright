@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-09-28
+### Fixed
+- `portwright skills status` reads the approved list from `origin/main` after a fetch, not from the work checkout, which may be behind or dirty.
+- Hub operator list pages (`/admin/events`, `/admin/intake`) now put only the filters in use into SQL. Migration `0002_list_indexes.sql` also adds `(created, id)` and `(kind, created, id)` indexes. The old `?x IS NULL OR …` filters made every page scan the whole table. On 2026-09-28 one events query read 9.57M rows in 11,080 calls (864 rows per call), and the account hit D1's free daily read limit.
+
 ## [4.0.0] - 2026-09-28
 ### Added
 - `portwright skills serve`: the stdio MCP server `portwright-skills`, in the Python standard library. It has five tools (`search_skills`, `load_skill`, `read_skill_file`, `create_skill`, `update_skill`) over local skill folders and the personal registry. Local skills are `skill://portwright/local/<folder>/<path>`. Every remote file is digest-verified when read, and writes are local-only, digest-guarded, locked and atomic. It replaces the gisul local server and bridge.
@@ -194,3 +199,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [3.0.0]: ../../releases/tag/v3.0.0
 [3.0.1]: ../../releases/tag/v3.0.1
 [4.0.0]: ../../releases/tag/v4.0.0
+[4.0.1]: ../../releases/tag/v4.0.1

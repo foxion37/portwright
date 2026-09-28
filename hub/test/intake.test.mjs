@@ -5,7 +5,8 @@ import { Miniflare } from 'miniflare';
 import { createToken, hashToken, manageToken } from '../src/auth.ts';
 import { confirmLesson, listEvents, listIntake, reportFailure, submitLesson, transitionIntake } from '../src/intake.ts';
 
-const MIGRATION = await readFile(new URL('../migrations/0001_intake.sql', import.meta.url), 'utf8');
+const MIGRATION = (await Promise.all(['0001_intake.sql', '0002_list_indexes.sql']
+  .map(name => readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8')))).join(';\n');
 const NOW = Math.floor(Date.now() / 1000);
 const DAY = Math.floor(NOW / 86400);
 const digest = seed => 'sha256:' + [String(seed)].map(ch => ch.charCodeAt(0).toString(16)).join('').padEnd(64, '0');
@@ -502,4 +503,40 @@ test('events can be filtered by kind across notes', async t => {
   const reports = (await listEvents({ kind: 'report' }, operator)).items;
   assert.deepEqual(reports.map(item => item.kind), ['report']);
   await assert.rejects(listEvents({ kind: 'Report;' }, operator), e => e.code === 'INVALID_PARAMS');
+});
+
+/** Records every SQL statement and its bindings, then runs it unchanged. */
+function recording(db, seen) {
+  return new Proxy(db, {
+    get(target, prop) {
+      if (prop !== 'prepare') { const value = target[prop]; return typeof value === 'function' ? value.bind(target) : value; }
+      return sql => {
+        const statement = target.prepare(sql);
+        return { bind: (...args) => { seen.push({ sql, args }); return statement.bind(...args); } };
+      };
+    },
+  });
+}
+
+test('operator list queries read through indexes, never a full events or intake scan', async t => {
+  const { db, operator } = await setup(t);
+  const { ctx } = await submitContext(db, operator);
+  await confirmLesson({ note_id: 'service/plan', revision: digest('p'), success_evidence: evidence({ action: 'ran it' }) }, ctx);
+  const seen = [];
+  const traced = { ...operator, db: recording(db, seen) };
+  const first = await listEvents({ limit: 1 }, traced);
+  const cursor = encodeURIComponent(first.next_cursor ?? '');
+  await listEvents({ note_id: 'service/plan', revision: digest('p') }, traced);
+  await listEvents({ kind: 'confirm' }, traced);
+  if (first.next_cursor) await listEvents({ after: decodeURIComponent(cursor) }, traced);
+  await listIntake({}, traced);
+  await listIntake({ state: 'pending' }, traced);
+  assert.ok(seen.length >= 5);
+  for (const { sql, args } of seen) {
+    const plan = (await db.prepare('EXPLAIN QUERY PLAN ' + sql).bind(...args).all()).results.map(row => row.detail);
+    for (const detail of plan) assert.doesNotMatch(detail, /^SCAN (e|i)$/, `${detail} in ${sql.slice(0, 80)}`);
+    if (sql.includes('FROM events') && args.includes('service/plan')) assert.ok(plan.some(d => /events_revision/.test(d)), plan.join(' | '));
+    if (sql.includes('FROM events') && args.includes('confirm')) assert.ok(plan.some(d => /events_kind/.test(d)), plan.join(' | '));
+    if (sql.includes('FROM intake') && args.includes('pending')) assert.ok(plan.some(d => /intake_queue/.test(d)), plan.join(' | '));
+  }
 });
