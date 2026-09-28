@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from urllib.request import Request
@@ -192,12 +193,17 @@ def _result(payload: Any, is_error: bool = False) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}], "isError": is_error}
 
 
-def serve(root: Path, *, stdin=None, stdout=None) -> None:
-    """Serve newline-delimited JSON-RPC 2.0 until stdin EOF."""
-    root = Path(root).resolve()
-    stdin = stdin or sys.stdin
-    stdout = stdout or sys.stdout
-    engine = Preflight(root)
+InvalidParams = _InvalidParams  # raised by tool handlers of any stdio server built on run_stdio
+
+
+def run_stdio(stdin, stdout, *, server_name: str, version: str,
+              list_tools: Callable[[], list[dict[str, Any]]],
+              call_tool: Callable[[str, dict[str, Any]], Any]) -> None:
+    """Serve newline-delimited JSON-RPC 2.0 MCP until stdin EOF.
+
+    ``call_tool`` returns a finished ``tools/call`` result dict. It raises
+    ``_InvalidParams`` for bad arguments; any other exception is an internal error.
+    """
 
     def handle(request: dict[str, Any]) -> dict[str, Any] | None:
         request_id = request.get("id")
@@ -209,48 +215,20 @@ def serve(root: Path, *, stdin=None, stdout=None) -> None:
                 result = {
                     "protocolVersion": offered if offered in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0],
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "portwright", "version": _version(root)},
+                    "serverInfo": {"name": server_name, "version": version},
                 }
             elif method == "notifications/initialized":
                 return None
             elif method == "ping":
                 result = {}
             elif method == "tools/list":
-                result = {"tools": TOOLS + _relay_tools(root)}
+                result = {"tools": list_tools()}
             elif method == "tools/call":
                 name = params.get("name")
                 args = params.get("arguments") or {}
                 if not isinstance(name, str) or not isinstance(args, dict):
                     raise _InvalidParams("name and arguments are required")
-                try:
-                    if name == "preflight":
-                        payload = _tool_preflight(root, engine, args)
-                    elif name == "get_note":
-                        path = _note_path(root, args.get("path"), args)
-                        relative = path.relative_to(root).as_posix()
-                        location = note_location(relative)
-                        catalog = _catalog(root, args)
-                        if location and location[1] == "hub" and not catalog._legacy_hub():
-                            _, notes = snapshot(root, args.get("hub"), include_trial=catalog._trial())
-                            text = next((note["text"] for note, candidate in notes if candidate == relative), None)
-                            if text is None:
-                                raise ValueError("Hub note is not in the active generation")
-                        else:
-                            text = path.read_text(encoding="utf-8")
-                        payload = {"path": relative, "text": text}
-                    elif name == "status":
-                        payload = _tool_status(root)
-                    elif name in ("submit_lesson", "confirm_lesson", "report_failure"):
-                        payload = _relay(root, name, args)
-                        result = _result(payload, is_error=True) if "error" in payload else payload
-                        return {"jsonrpc": "2.0", "id": request_id, "result": result}
-                    else:
-                        raise _InvalidParams(f"unknown tool: {name}")
-                    result = _result(payload)
-                except _InvalidParams:
-                    raise
-                except Exception as error:
-                    result = _result(_safe_error(error), is_error=True)
+                result = call_tool(name, args)
             else:
                 return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "method not found"}}
         except _InvalidParams as error:
@@ -277,3 +255,42 @@ def serve(root: Path, *, stdin=None, stdout=None) -> None:
         if reply is not None:
             stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
             stdout.flush()
+
+
+def serve(root: Path, *, stdin=None, stdout=None) -> None:
+    """Serve preflight, get_note, status and the Hub relay tools until stdin EOF."""
+    root = Path(root).resolve()
+    engine = Preflight(root)
+
+    def call_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
+        try:
+            if name == "preflight":
+                payload = _tool_preflight(root, engine, args)
+            elif name == "get_note":
+                path = _note_path(root, args.get("path"), args)
+                relative = path.relative_to(root).as_posix()
+                location = note_location(relative)
+                catalog = _catalog(root, args)
+                if location and location[1] == "hub" and not catalog._legacy_hub():
+                    _, notes = snapshot(root, args.get("hub"), include_trial=catalog._trial())
+                    text = next((note["text"] for note, candidate in notes if candidate == relative), None)
+                    if text is None:
+                        raise ValueError("Hub note is not in the active generation")
+                else:
+                    text = path.read_text(encoding="utf-8")
+                payload = {"path": relative, "text": text}
+            elif name == "status":
+                payload = _tool_status(root)
+            elif name in ("submit_lesson", "confirm_lesson", "report_failure"):
+                payload = _relay(root, name, args)
+                return _result(payload, is_error=True) if "error" in payload else payload
+            else:
+                raise _InvalidParams(f"unknown tool: {name}")
+            return _result(payload)
+        except _InvalidParams:
+            raise
+        except Exception as error:
+            return _result(_safe_error(error), is_error=True)
+
+    run_stdio(stdin or sys.stdin, stdout or sys.stdout, server_name="portwright", version=_version(root),
+              list_tools=lambda: TOOLS + _relay_tools(root), call_tool=call_tool)

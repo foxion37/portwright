@@ -64,7 +64,7 @@ test('HTTP sync defaults to stable, opts trial in, and excludes recalled revisio
 
 test('a newly recalled revision disappears from current and pinned MCP reads and sync', async t => {
   const { get, rpc, bucket } = await worker(t);
-  const opted = { _meta: { 'io.portwright/include_trial': true, 'io.gisul/commit': inventory.commit } };
+  const opted = { _meta: { 'io.portwright/include_trial': true, 'io.portwright/commit': inventory.commit } };
   const before = await (await rpc('skills/list', opted)).json();
   assert.deepEqual(before.result.skills.map(s => s.grade), ['trial']);
   const candidate = inventory.skills[1].note_refs[0];
@@ -75,6 +75,15 @@ test('a newly recalled revision disappears from current and pinned MCP reads and
   assert.deepEqual(synced.notes.map(n => n.note_id), ['service/anchor']);
   const read = await (await rpc('resources/read', { uri: inventory.skills[1].uri, ...opted })).json();
   assert.equal(read.error.code, -32602);
+});
+
+test('only io.portwright/commit pins a release; the retired io.gisul/commit key is ignored', async t => {
+  const { rpc } = await worker(t);
+  const pinned = await (await rpc('skills/list', { _meta: { 'io.portwright/commit': 'not-a-commit' } })).json();
+  assert.equal(pinned.error.code, -32602);
+  const retired = await (await rpc('skills/list', { _meta: { 'io.gisul/commit': 'not-a-commit' } })).json();
+  assert.deepEqual(retired.result.skills, []);
+  assert.equal(retired.result._meta.commit, inventory.commit);
 });
 
 test('personal cannot enable intake; valid personal reader has no submit tools', async t => {

@@ -104,11 +104,20 @@ def _parser() -> argparse.ArgumentParser:
     models.add_argument("--json", action="store_true")
     models.add_argument("--home")
 
-    skills = sub.add_parser("skills", help="Serve the version-matched packaged skill guides (Orca-style stub loading)")
+    skills = sub.add_parser("skills", help="Packaged skill guides, and the portwright-skills MCP server for local and personal-Hub skills")
     skills_sub = skills.add_subparsers(dest="skills_command", required=True)
     skills_sub.add_parser("list")
     get = skills_sub.add_parser("get")
     get.add_argument("name")
+    serve = skills_sub.add_parser("serve", help="Serve local skill folders and the personal Hub as the stdio MCP server portwright-skills")
+    serve.add_argument("--home")
+    status = skills_sub.add_parser("status", help="Compare approved personal skills with their local originals (changed, missing, unapproved)")
+    status.add_argument("--home")
+    status.add_argument("--json", action="store_true")
+    stage = skills_sub.add_parser("stage", help="Screen one local original and open a pull request that updates its approved copy")
+    stage.add_argument("name")
+    stage.add_argument("--home")
+    stage.add_argument("--no-pr", action="store_true", help="Commit and push the branch without opening a pull request")
     mcp = sub.add_parser("mcp", help="Serve preflight, get_note, and status as a stdio MCP server")
     mcp.add_argument("--home")
     sub.add_parser("help", help="Show this help")
@@ -142,6 +151,33 @@ def _models(args: argparse.Namespace) -> int:
 
 
 def _skills(args: argparse.Namespace) -> int:
+    if args.skills_command == "serve":
+        from .skills_mcp import serve
+
+        serve(_root(args.home))
+        return 0
+    if args.skills_command in ("status", "stage"):
+        from .skills_local import load_config
+
+        try:
+            from .skills_publish import stage, status
+        except ModuleNotFoundError:
+            raise ValueError("skills status and stage need the private work repository checkout") from None
+
+        config = load_config(_root(args.home))
+        if args.skills_command == "stage":
+            print(json.dumps(stage(config, args.name, open_pr=not args.no_pr), ensure_ascii=False))
+            return 0
+        rows = status(config)
+        if args.json:
+            print(json.dumps(rows, ensure_ascii=False))
+            return 0
+        for row in rows:
+            if row["state"] != "unapproved":
+                print(f"{row['state']:<8} {row['name']}" + (f"  ({row['root_id']})" if row["root_id"] else ""))
+        unapproved = sum(row["state"] == "unapproved" for row in rows)
+        print(f"unapproved {unapproved} local skills (--json lists them)")
+        return 0
     skill_root = PACKAGE_ROOT / "skills"
     names = sorted(path.parent.name for path in skill_root.glob("*/SKILL.md"))
     if args.skills_command == "list":

@@ -85,7 +85,7 @@ except ImportError:
 FORBIDDEN_PARTS = {"_private", "_drafts", "_evidence", "_hub", "profiles"}
 PACKAGED_SKILLS = ("portwright-tool-use", "portwright-tool-memory")
 PERSONAL_ROOT = "skills/personal"
-RESERVED_NAMES = {"personal", *PACKAGED_SKILLS}
+RESERVED_NAMES = {"personal", "local", *PACKAGED_SKILLS}  # "local" prefixes portwright-skills local URIs
 MARKER = ".portwright-build"
 MAX_RESOURCE_BYTES = 1024 * 1024
 SEGMENT_RE = re.compile(r"[A-Za-z0-9._~-]+")

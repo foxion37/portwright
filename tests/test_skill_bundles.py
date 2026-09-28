@@ -233,15 +233,15 @@ class TestRefusals(RepoCase):
         self.assertNotIn(".".join(("100", "64", "0", "1")), str(caught.exception))
 
     def test_public_note_home_is_anonymized_without_changing_source(self) -> None:
-        path = write_service(self.repo, "local", extra="distributable: true")
+        path = write_service(self.repo, "cache-demo", extra="distributable: true")
         path.write_text(path.read_text() + "\nUsed /users/" + "ab" + "/cache to reproduce.\n")
         self.commit(self.repo)
         inventory = self.build()
-        output = (self.out / "local" / "SKILL.md").read_text()
+        output = (self.out / "cache-demo" / "SKILL.md").read_text()
         self.assertIn("~/cache", output)
         self.assertNotIn("/users/" + "ab" + "/", output)
         self.assertIn("/users/" + "ab" + "/", path.read_text())
-        self.assertIn("local", inventory["skills"])
+        self.assertIn("cache-demo", inventory["skills"])
 
     def test_private_tracked_note_skipped_never_published(self) -> None:
         path = write_service(self.repo, "hidden", extra="distributable: true", private=True)
@@ -603,6 +603,14 @@ class TestPersonalBuild(TempRepo):
         with self.assertRaises(SystemExit) as caught:
             self.build()
         self.assertIn("not in the approved inventory", str(caught.exception))
+
+    def test_local_is_reserved_for_portwright_skills_uris(self) -> None:
+        self.write_package("local")
+        self.approval.write_text(json.dumps({"skills": [self.approval_entry("demo"), self.approval_entry("local")]}), encoding="utf-8")
+        self.commit(self.repo)
+        with self.assertRaises(SystemExit) as caught:
+            self.build()
+        self.assertIn("collides", str(caught.exception))
 
     def test_package_bytes_must_match_the_approval(self) -> None:
         write_skill(self.repo, "skills/personal/demo/references/guide.md", "# changed\n")

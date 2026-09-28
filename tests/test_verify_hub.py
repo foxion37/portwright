@@ -2141,7 +2141,7 @@ console.log(JSON.stringify({status:response.status,body:await response.json()}))
         recalled = True
         runner.check_directory(target["uri"], inventory["commit"], recalled=True, remaining=remaining)
         _, bad = rpc("resources/directory/read", {"uri": target["uri"].rsplit("/", 1)[0] + "/",
-            "_meta": {"io.gisul/commit": inventory["commit"], "io.portwright/include_trial": True}}, "read")
+            "_meta": {"io.portwright/commit": inventory["commit"], "io.portwright/include_trial": True}}, "read")
         self.assertEqual(bad["error"]["message"], "INVALID_PARAMS")
 
     def test_wire_real_h4_cli_preflight_mcp_and_recall(self):
