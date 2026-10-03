@@ -9,12 +9,12 @@ Oh My Pi documents this default user location in its
 This adapter intentionally targets the default home and does not follow a
 custom `PI_CODING_AGENT_DIR` or named profile.
 
-`<portwright>` is the directory where you cloned this repository; the installed managed block uses that path.
+`$PW` is the absolute path of your clone, as set in the [install guide](../README.md) (`PW=...`); always quote it, e.g. `"$PW/bin/portwright"`. The installed text records that path, so re-run install after moving the clone. This adapter installs guidance only; it does not register an MCP server or launch the Client.
 
 ## Install
 
 ```sh
-<portwright>/bin/portwright client install oh-my-pi
+"$PW/bin/portwright" client install oh-my-pi
 ```
 
 The managed block is bounded by these markers:
@@ -27,13 +27,13 @@ The managed block is bounded by these markers:
 ## Verify
 
 ```sh
-<portwright>/bin/portwright client doctor oh-my-pi
+"$PW/bin/portwright" client doctor oh-my-pi
 ```
 
 ## Remove
 
 ```sh
-<portwright>/bin/portwright client remove oh-my-pi
+"$PW/bin/portwright" client remove oh-my-pi
 ```
 
 Text outside the managed block is preserved.

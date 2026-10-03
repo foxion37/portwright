@@ -297,7 +297,7 @@ class Hub:
             # Only the status is safe to retain; errors may quote submitted text.
             exc.close()
             return exc.code, None
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError):  # URLError, timeouts, and resets raised while reading
             raise Blocked("http-unavailable") from None
 
     def capture(self, method, path, role, *, origin=None, raw=None):
@@ -324,7 +324,7 @@ class Hub:
                 status, body = exc.code, exc.read(limit + 1)
             finally:
                 exc.close()
-        except (urllib.error.URLError, TimeoutError):
+        except OSError:  # URLError, timeouts, and resets raised while reading
             raise Blocked("http-unavailable") from None
         if len(body) > limit:
             raise Blocked("response-incomplete")
@@ -470,7 +470,7 @@ class Hub:
         try:
             with OPEN(req, timeout=30) as response:
                 runs = json.load(response)["workflow_runs"]
-        except (urllib.error.URLError, KeyError, ValueError):
+        except (OSError, KeyError, ValueError):
             raise Blocked("workflow-read-incomplete") from None
         return [run for run in runs
                 if isinstance(run, dict) and isinstance(run.get("id"), int) and run["id"] > previous]
@@ -538,7 +538,7 @@ class Hub:
             with OPEN(req, timeout=30) as response:
                 if response.status != 204:
                     raise Blocked("workflow-dispatch-unconfirmed")
-        except (urllib.error.URLError, TimeoutError):
+        except OSError:
             raise Blocked("workflow-dispatch-unavailable") from None
         return previous
 
@@ -1350,7 +1350,7 @@ class Hub:
                 if not document.get("success"):
                     raise Blocked("deployment-settings-incomplete")
                 return document["result"]
-        except (urllib.error.URLError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError):
             raise Blocked("deployment-settings-incomplete") from None
 
     def scenario_secrets(self):
@@ -1565,7 +1565,7 @@ class Hub:
             try:
                 with OPEN(req, timeout=30) as response:
                     page = json.load(response)
-            except (urllib.error.URLError, ValueError):
+            except (OSError, ValueError):
                 raise Blocked("r2-read-incomplete") from None
             if not isinstance(page, dict):
                 raise Blocked("r2-read-incomplete")
@@ -1594,7 +1594,7 @@ class Hub:
                 if len(content) > 16 * 1024 * 1024:
                     raise Blocked("r2-object-incomplete")
                 return content
-        except urllib.error.URLError:
+        except OSError:
             raise Blocked("r2-read-incomplete") from None
 
     def r2_object(self, key):

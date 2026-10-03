@@ -3,5 +3,5 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(dirname -- "$SCRIPT_DIR")"
-export PYTHONPATH="$ROOT/lib${PYTHONPATH:+:$PYTHONPATH}"
-exec python3 -m portwright.cli "$@"
+# Keep project modules off Python's import path without changing profile-routing cwd.
+exec python3 -I -c 'import sys; sys.path.insert(0, sys.argv.pop(1)); from portwright.cli import main; raise SystemExit(main())' "$ROOT/lib" "$@"

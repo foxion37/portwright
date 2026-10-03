@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.2] - 2026-10-03
+### Fixed
+- The CLI now starts Python in isolated mode and loads its own library explicitly, so project files named `inspect.py`, `json.py` or `portwright.py` cannot shadow CLI imports. The working directory is unchanged, preserving Profile routing.
+- The publishing parser test checks correct parsing or explicit refusal of unsupported YAML, not incidental error wording. The local CLI does not require Node.js or a YAML dependency.
+
+### Changed
+- Installation and usage guides now cover anonymous public installation, isolated environments, shipped cache hits versus misses, private note promotion, Profiles, the two stdio MCP servers, adapter removal, and optional credential-dependent features. Added a Korean installation guide.
+- Public Hub documentation now distinguishes deployed invite-only access from unavailable company access and unresolved live acceptance checks; local synthetic checks do not claim production model or Hub acceptance.
+
 ## [4.0.1] - 2026-09-28
 ### Fixed
 - `portwright skills status` reads the approved list from `origin/main` after a fetch, not from the work checkout, which may be behind or dirty.
@@ -200,3 +209,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [3.0.1]: ../../releases/tag/v3.0.1
 [4.0.0]: ../../releases/tag/v4.0.0
 [4.0.1]: ../../releases/tag/v4.0.1
+[4.0.2]: ../../releases/tag/v4.0.2

@@ -9,11 +9,43 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests._v2 import write_profile
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class OutsideUserTest(unittest.TestCase):
+    def test_project_modules_do_not_shadow_cli_imports_or_change_routing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            home = base / "home"
+            project = base / "project"
+            home.mkdir()
+            project.mkdir()
+            write_profile(home, "demo", project, github="demo-account", db=None)
+            env = {
+                "HOME": str(home),
+                "PATH": os.path.dirname(sys.executable) + os.pathsep + os.defpath,
+                "PYTHONDONTWRITEBYTECODE": "1",
+            }
+            for name in ("inspect", "json", "portwright"):
+                with self.subTest(module=name):
+                    shadow = project / f"{name}.py"
+                    shadow.write_text("raise RuntimeError('project module imported')\n")
+                    try:
+                        result = subprocess.run(
+                            [str(ROOT / "bin/portwright"), "preflight", "unconfigured-demo",
+                             "--home", str(home), "--json"],
+                            cwd=project, env=env, text=True, capture_output=True,
+                        )
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        decision = json.loads(result.stdout)
+                        self.assertEqual(decision["state"], "derive-required")
+                        self.assertEqual(decision["profile"]["id"], "demo")
+                    finally:
+                        shadow.unlink()
+
     def test_fresh_clone_installs_clients_and_derives_missing_procedure(self) -> None:
         exporter = ROOT / "scripts" / "export_public.py"
         if not exporter.is_file():
