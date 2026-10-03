@@ -20,16 +20,16 @@
 | **Lesson(교훈)** | `failures/<날짜>-<도구>-<증상>.md` | 무엇을 시도했는지, 확인된 진짜 원인, 다음에 맞는 방법 |
 | **Profile(프로파일)** | `profiles/<프로젝트>.md` | 이 디렉터리가 어느 GitHub 계정, 어느 비밀 저장소, 어느 데이터베이스에 속하는지 |
 
-한 번 호출하면 네 가지를 한꺼번에 답합니다.
+공개 저장소를 새로 복제하면 한 번 호출해 다음을 확인할 수 있습니다(출력 일부이며 `PW`는 클론 디렉터리입니다).
 
 ```text
-$ portwright preflight google-apps-script
-READY: google-apps-script
-Profile: portwright (github <account>, env 1password/DEVELOPER, db -)
-Procedure: services/google-apps-script.md
-Freshness: fresh (version match only; procedure steps not revalidated)
+$ "$PW/bin/portwright" preflight github
+READY: github
+Profile: (none) no profiles defined
+Procedure: services/github.md
+Freshness: unknown -> verify-required (no evidence supplied (rule 3))
 Tier: confirm
-Active Lessons: 0
+Active Lessons: 3
 ```
 
 지금 어느 계정인지, 절차가 무엇인지, 이 메모를 믿어도 되는지, 사용자에게 먼저 물어야 하는지입니다.
@@ -72,7 +72,7 @@ Portwright v1은 일부러 작게 유지합니다.
 
 이 저장소는 절차와 교훈을 보관합니다. 에이전트는 행동하기 전에 그것을 읽습니다.
 
-외부 개발자, 회사 동료, 비개발자도 임의의 경로에 복제한 로컬 CLI를 에이전트와 함께 사용할 수 있습니다. 공유 공개 Hub(M2)와 별도 회사 Hub(M3)는 계획 단계이며 v2.1.0에는 아직 없습니다. 사용자별 역할과 범위는 [역할과 범위](docs/roles-and-scope_KR.md)를 참고하세요.
+외부 개발자, 회사 동료, 비개발자도 임의의 경로에 복제한 로컬 CLI를 에이전트와 함께 사용할 수 있습니다. 계정, 네트워크, 자격증명이 필요 없습니다. 공유 공개 Hub(M2)는 배포되어 있지만 초대제입니다. 운영자에게 초대 토큰을 받아야 하고, 최신 실서버 SECRETS/INJECTION 인수 실행은 아직 해결되지 않았으므로 선택 사항이며 검증이 끝나지 않은 기능으로 보세요. 별도 회사 Hub(M3)는 승인되지 않았고 사용할 수 없습니다. 사용자별 역할과 범위는 [역할과 범위](docs/roles-and-scope_KR.md)를 참고하세요.
 
 ## 누구를 위한 것인가
 
@@ -140,7 +140,7 @@ Portwright를 쓰는 에이전트는 먼저 이렇게 확인해야 합니다.
 
 짧은 버전은 이렇습니다.
 
-1. 이 저장소를 내 컴퓨터의 안정적인 위치에 clone합니다. 아래 `<portwright>`는 clone한 디렉터리입니다. `--home`이나 `PORTWRIGHT_HOME`을 지정하지 않으면 노트도 이곳에 저장합니다.
+1. 이 저장소를 내 컴퓨터의 안정적인 위치에 clone합니다(설치 안내 참고): `PW="$HOME/tools/portwright"`. 아래 `$PW`는 clone한 디렉터리입니다. `--home`이나 `PORTWRIGHT_HOME`을 지정하지 않으면 노트도 이곳에 저장합니다.
 2. 사용하는 Client에 맞는 adapter를 고릅니다.
    - [Claude Code](install/adapters/claude-code.md)
    - [Codex](install/adapters/codex.md)
@@ -153,14 +153,14 @@ Portwright를 쓰는 에이전트는 먼저 이렇게 확인해야 합니다.
 3. 맞는 설치 명령을 실행합니다. Codex라면 다음과 같습니다.
 
 ```sh
-<portwright>/bin/portwright client install codex
+"$PW/bin/portwright" client install codex
 ```
 
 4. Client를 다시 시작하고 Memory와 설치 상태를 확인합니다.
 
 ```sh
-<portwright>/bin/portwright check
-<portwright>/bin/portwright client doctor codex
+"$PW/bin/portwright" check
+"$PW/bin/portwright" client doctor codex
 ```
 
 ## 사용 방법
@@ -171,26 +171,199 @@ Portwright를 쓰는 에이전트는 먼저 이렇게 확인해야 합니다.
 2. 명령이 돌려준 Procedure와 active Lesson을 읽습니다.
 3. 이미 연결된 백엔드가 있으면 그쪽으로 직접 처리합니다.
 4. OAuth 승인처럼 사람만 할 수 있는 단계만 사용자에게 묻습니다.
-5. 새 Failure의 root cause를 확인했다면 Lesson draft를 만듭니다. 검사를
-   통과한 draft만 정식 Memory로 옮깁니다.
+5. 새 Failure의 root cause를 확인했다면 Lesson draft를 만듭니다. 검사를 통과한 draft만 정식 Memory로 옮깁니다.
+
+아래 로컬 실습(콘텐츠 홈부터 스킬까지)은 네트워크와 자격증명이 필요 없습니다. 필요한 선택 기능은 마지막 표에 따로 정리했습니다. 연습용 가상 이름(`acme-demo`, `demo-app`, `example-org`)을 쓰므로 전체 순환을 연습할 수 있습니다. 예제 내용은 가상의 연습 데이터이며 실제 도구의 사용법이 아닙니다. 실제 도구의 노트는 그 도구의 최신 공식 문서를 보고 채우세요.
+
+### 콘텐츠 홈 정하기
+
+노트는 **콘텐츠 홈**, 곧 내가 소유한 아무 디렉터리에 저장됩니다. `--home`이나 `PORTWRIGHT_HOME`을 지정하지 않으면 clone 자체가 홈입니다. 홈을 따로 두면 노트가 코드 체크아웃과 섞이지 않으며, 빈 디렉터리면 충분합니다. 스키마와 번들 스킬은 계속 clone에서 가져옵니다. `--home`은 `PORTWRIGHT_HOME`보다 우선하며, 다른 홈에서는 이 홈의 비공개 노트가 보이지 않습니다.
+
+`PW`는 [설치 안내](install/README.md)의 clone 디렉터리입니다(경로는 자유이며 공백이 있어도 항상 따옴표로 감싸면 됩니다).
 
 ```sh
-bin/portwright memory draft lesson <service-id> <slug>
-bin/portwright memory promote <draft-path>
+PW="$HOME/tools/portwright"
+export PORTWRIGHT_HOME="$HOME/portwright-notes"   # 또는 모든 명령에 --home "$HOME/portwright-notes"
+mkdir -p "$PORTWRIGHT_HOME"
+"$PW/bin/portwright" check                         # 빈 홈에서 "0 passed, 0 failed"는 정상
 ```
 
-2.0.0 명령:
-
-```sh
-bin/portwright preflight <service-id> [--intent call|instruct|recover] [--profile <id>] [--json]
-bin/portwright browser select --candidates candidates.json --goal "<text>" [--json]   # 파일에 후보 목록
-bin/portwright update --dry-run --json   # 미리보기. update 가 git pull --ff-only 를 직접 수행하므로 pull 을 먼저 하지 않는다
-bin/portwright update
-```
+### Preflight: 캐시 미스에서 히트까지
 
 ```sh
-bin/portwright review --days 90   # 캐시가 말하는 다음 개선점 (추측이 아니라 카운팅)
+"$PW/bin/portwright" preflight acme-demo
 ```
+
+빈 홈에서는 처음 줄이 `DERIVE REQUIRED: acme-demo`, `Procedure: (cache miss)`, `Freshness: unknown -> derive-required`, `Tier: confirm`입니다. 오류가 아니라 예상된 첫 응답입니다(종료 코드 0). 미리 써 둔 절차가 없으므로 실제 도구라면 에이전트가 공식 문서에서 현재 절차를 도출해 캐시합니다. 먼저 draft를 만듭니다.
+
+```sh
+"$PW/bin/portwright" memory draft procedure acme-demo   # <TODO ...> 표시가 있는 services/_drafts/acme-demo.md 생성
+```
+
+실제 draft는 `<TODO ...>`를 공식 문서로 모두 채워야 합니다(템플릿 제목은 한국어이며 그대로 둡니다). 실제 도구 없이 연습하려면 draft를 아래 가상 Procedure로 덮어씁니다.
+
+```sh
+cat > "$PORTWRIGHT_HOME/services/_drafts/acme-demo.md" <<'EOF'
+---
+id: acme-demo
+display_name: "Acme Demo (fictional)"
+version_tag: "1.2"
+last_verified: "2026-10-01"
+endpoint:
+  type: cli
+  server: "acme-demo CLI (fictional)"
+human_steps:
+  - "없음"
+agent_can:
+  - "Run the fictional command: acme-demo status"
+status: active
+distributable: false
+---
+
+## 한 줄 요약
+Practice note for a made-up tool. Not a real procedure.
+
+## 정답 절차
+1. Run `acme-demo status`.
+
+## 하지 말 것
+- Do not ask the user for a token.
+
+## 관련 실패 기록
+- 없음
+EOF
+```
+
+그다음 검사하고 승격합니다.
+
+```sh
+"$PW/bin/portwright" memory review services/_drafts/acme-demo.md    # READY TO PROMOTE 또는 PROMOTION BLOCKED. 파일은 옮기지 않음
+"$PW/bin/portwright" memory promote services/_drafts/acme-demo.md   # PROMOTED: services/_private/acme-demo.md
+"$PW/bin/portwright" preflight acme-demo                            # 이제 READY, Procedure: services/_private/acme-demo.md
+```
+
+승격 가드가 확인하는 것(모두 통과해야 하며, 하나라도 실패하면 아무것도 옮기지 않습니다).
+
+- draft가 홈 안의 `services/_drafts/` 또는 `failures/_drafts/` 바로 아래에 있고 심볼릭 링크가 아닙니다.
+- 노트가 계약을 만족합니다(필드 오류는 `check`에 나옵니다). `<TODO`, `<replace`, `TODO:`, `[REDACT THIS` 표시가 남아 있지 않습니다.
+- `install/secret-patterns.json`에 걸리는 비밀 의심 문자열이 없습니다. 패턴 검사이므로 모든 비밀을 찾아내지는 못합니다. 자격증명 값은 노트에 쓰지 마세요.
+- Lesson의 `## 진짜 원인`(root cause)이 아직 `unconfirmed`가 아닙니다.
+- 대상 파일이 이미 있으면 `--replace` 없이는 덮어쓰지 않으며, `--replace`를 쓰면 먼저 타임스탬프가 붙은 `.bak-` 사본을 남깁니다.
+
+draft의 기본값은 `distributable: false`이므로 `services/_private/`나 `failures/_private/`로 승격됩니다(개인용, gitignore, 배포 제외). 일부러 `distributable: true`로 표시한 노트만 추적 대상 `services/`, `failures/`로 승격됩니다. 승격은 draft를 옮기므로 같은 경로를 다시 승격하면 `draft file does not exist`가 나옵니다. 같은 이름으로 `memory draft`를 다시 실행하면 `DRAFT EXISTS`를 출력하고 편집 내용은 그대로 둡니다.
+
+### Lesson
+
+```sh
+TODAY="$(date +%F)"
+"$PW/bin/portwright" memory draft lesson acme-demo timeout   # failures/_drafts/$TODAY-acme-demo-timeout.md
+cat > "$PORTWRIGHT_HOME/failures/_drafts/$TODAY-acme-demo-timeout.md" <<EOF
+---
+date: "$TODAY"
+service: acme-demo
+service_version: "1.2"
+status: active
+distributable: false
+---
+
+## 증상
+The fictional status call hangs for 30 seconds.
+
+## 진짜 원인
+A made-up proxy setting pointed at a closed port.
+
+## 해결
+Unset the proxy variable for this call.
+
+## 다음에 할 일
+Check the proxy variable first when the call hangs.
+EOF
+"$PW/bin/portwright" memory promote "failures/_drafts/$TODAY-acme-demo-timeout.md"
+```
+
+원인 섹션이 `unconfirmed` 대신 확인된 원인을 적을 때까지 승격은 막힙니다(생성된 draft는 `unconfirmed`이며 위 파일이 이를 대체합니다). 승격된 Lesson은 해당 Procedure의 관련 실패 기록에 링크되고, 다음 preflight의 `Active Lessons`에 나타납니다.
+
+### 신선도 근거
+
+`fresh`에는 근거가 필요합니다. 공식 문서에서 현재 버전이나 가져온 날짜를 확인해 넘깁니다.
+
+```sh
+"$PW/bin/portwright" preflight acme-demo --evidence-version 1.2            # 노트의 version_tag와 같음 -> fresh (버전이 같다는 뜻뿐)
+"$PW/bin/portwright" preflight acme-demo --evidence-version 1.3            # 다름 -> stale, derive-required
+"$PW/bin/portwright" preflight acme-demo --evidence-fetched-at 2026-09-30  # last_verified 이전·당일 -> fresh, 이후 -> unknown, verify-required
+```
+
+근거가 없으면 `unknown`과 `verify-required`입니다. `--evidence-file <텍스트 파일>`은 아래 JEV가 있을 때만 동작하는 선택적 모순 검사를 추가하며, 판정의 보조 근거일 뿐 결론이 아닙니다. Procedure가 `freshness_evidence.url`을 선언하고 `distributable: true`이면 `update`가 공식 문서 페이지를 내려받아 이후 preflight에 쓰도록 캐시합니다.
+
+### 선택: Profile
+
+Profile은 프로젝트 디렉터리를 알맞은 GitHub 계정, 비밀 저장소, 데이터베이스에 묶습니다. 값이 아니라 참조만 적습니다. 아래 완전한 예제로 `<content-home>/profiles/demo-app.md`를 만듭니다(`project_path`는 실제로 존재하는 디렉터리의 절대 경로이며 `injector: none`도 허용).
+
+```sh
+mkdir -p "$HOME/demo-project" "$PORTWRIGHT_HOME/profiles"
+cat > "$PORTWRIGHT_HOME/profiles/demo-app.md" <<EOF
+---
+id: demo-app
+display_name: Demo App
+project_path: $HOME/demo-project
+github_account: example-org
+env_source:
+  kind: none
+  injector: none
+databases:
+  - sqlite:demo
+services:
+  - acme-demo
+default_tier: confirm
+host: any
+status: active
+---
+
+## 한 줄 요약
+Demo project profile (fictional).
+EOF
+"$PW/bin/portwright" check
+cd "$HOME/demo-project" && "$PW/bin/portwright" preflight acme-demo
+```
+
+출력에 `Profile: demo-app (github example-org, env none, db sqlite:demo)` 줄이 나옵니다. `project_path`가 가장 길게 일치하는 Profile이 이기며, `--profile <id>`나 `--cwd <dir>`로 직접 지정할 수 있습니다. 후보가 여럿이라 모호하고 JEV도 없으면 추측하지 않고 Profile을 `(none)`으로 둡니다. Profile의 `default_tier`는 조언 등급을 올리기만 합니다. `auto`로 적어도 규칙과 JEV 판단이 없을 때의 `confirm`을 낮추지 않습니다.
+
+### 노트 MCP와 스킬 MCP는 서로 다른 서버입니다
+
+| 서버 | 명령 | 도구 | 쓰기 |
+|---|---|---|---|
+| **노트 MCP** (`portwright`) | `"$PW/bin/portwright" mcp --home "$PORTWRIGHT_HOME"` | `preflight`, `get_note`, `status` | 노트를 수정하지 않음. CLI와 같이 `preflight`는 `_local/` 아래(gitignore)에 로컬 사용 기록을 추가하며 `review`가 읽습니다. 지워도 문제없습니다 |
+| **스킬 MCP** (`portwright-skills`) | `"$PW/bin/portwright" skills serve --home "$PORTWRIGHT_HOME"` | `search_skills`, `load_skill`, `read_skill_file`, `create_skill`, `update_skill` | `create_skill`, `update_skill`은 로컬 스킬 폴더에 씁니다 |
+
+둘 다 네트워크 리스너가 없는 로컬 stdio 서버입니다. [설치 안내](install/README.md)의 공통 명령·인수와 사용하는 Client의 공식 MCP 문서를 보고 등록합니다. `client install`은 MCP 서버를 등록하지 않습니다. Client 없이 노트 MCP가 응답하는지 보려면 다음을 실행합니다.
+
+```sh
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"status","arguments":{}}}' | "$PW/bin/portwright" mcp --home "$PORTWRIGHT_HOME"
+```
+
+이것은 서버가 stdio로 응답한다는 것만 보여 주며, 특정 Client의 UI에 표시된다는 증거는 아닙니다.
+
+스킬 소비 기본: `"$PW/bin/portwright" skills list`와 `"$PW/bin/portwright" skills get portwright-tool-use`는 번들 스킬 두 개를 출력합니다. 내 스킬 폴더를 스킬 MCP로 노출하려면 `<content-home>/_local/skills.json`에 절대 경로를 적습니다. 각 폴더에는 `<스킬-이름>/SKILL.md`가 있고, 머리말에 폴더 이름과 같은 `name`과 `description`이 있어야 합니다.
+
+```json
+{"local":{"mine":"/work/my-skills"}}
+```
+
+개인 Hub를 설정하지 않으면 스킬 MCP는 `remote_unavailable`을 알리고 로컬 폴더만 제공합니다. `skills status`와 `skills stage`는 비공개 작업 저장소가 필요하므로 외부 사용자용이 아닙니다(공개 clone에서는 종료 코드 2로 그렇게 알립니다).
+
+### 네트워크, 키, 초대가 필요한 기능
+
+| 기능 | 필요한 것 | 없으면 |
+|---|---|---|
+| `check`, `preflight`, `memory`, `review`, 두 MCP 서버 | Python 3와 clone | 부족한 것 없음 |
+| JEV 판단(모호한 Profile, 위험 tier, 모순 검사) | 선택 사항인 유료 `TYPESAFE_API_KEY` 환경변수와 네트워크 | 결정적 대체 동작: Tier `confirm`, Freshness `unknown`, 모호한 Profile은 미결정. `status`에 `jev_mode: none` 표시 |
+| `update` (새 공유 노트, 근거 문서 다운로드) | clone이 `origin` 원격(`main` 브랜치)이 있는 git 체크아웃이어야 하고 네트워크 필요. 콘텐츠 홈을 따로 두었다면 `--home`으로 clone을 가리킵니다: `"$PW/bin/portwright" update --dry-run --home "$PW"` 후 `--dry-run` 없이 실행. 노트만 있는 홈에는 `VERSION`과 git 기록이 없어 `update`가 종료 코드 2로 실패합니다 | 가진 노트를 그대로 사용 |
+| 공유 공개 Hub (`hub sync`, 제출 도구) | 운영자가 발급한 초대 토큰. `_local/hub/config.json`에 적은 환경변수 이름으로 프로세스에 전달 | 로컬 노트만 사용. 설정이 없으면 `hub sync`는 종료 코드 2로 "Hub not configured"를 알림 |
+| 회사 Hub | 승인되지 않았고 사용할 수 없음 | — |
+
+자격증명 값을 명령, Client 설정, 노트, URL에 붙여 넣지 마세요. Hub 설정과 한계는 [역할과 범위](docs/roles-and-scope_KR.md)를 참고하세요.
+
+기타 명령: `"$PW/bin/portwright" browser select --candidates candidates.json --goal "<text>"`(후보 목록 파일, JEV가 있으면 사용), `"$PW/bin/portwright" review --days 90 --no-write`(캐시가 말하는 다음 개선점, 추측이 아니라 카운팅).
 
 예시는 이렇게 말할 수 있습니다.
 

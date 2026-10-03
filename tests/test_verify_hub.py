@@ -1874,6 +1874,23 @@ for await (const line of createInterface({input:process.stdin})) {
                 server.shutdown()
                 server.server_close()
 
+    def test_connection_reset_is_blocked_not_unexpected(self):
+        # urllib leaves errors raised while reading the response unwrapped (2026-09-29 SECRETS and INJECTION runs).
+        runner = self.module.Hub.__new__(self.module.Hub)
+        runner.origin, runner.dynamic_tokens = "https://hub.test", {"a": "synthetic"}
+
+        def reset(*args, **kwargs):
+            raise ConnectionResetError(54, "Connection reset by peer")
+
+        env = {"HUB_VERIFY_COMMONS_REPO": "owner/commons", "HUB_VERIFY_GITHUB_TOKEN": "synthetic"}
+        with patch.object(self.module, "OPEN", reset), patch.dict(os.environ, env):
+            for call, reason in ((lambda: runner.capture("POST", "/mcp", "a", raw=b"{}"), "http-unavailable"),
+                                 (lambda: runner.request("POST", "/mcp", "a", {}), "http-unavailable"),
+                                 (lambda: runner.workflow_runs(0), "workflow-read-incomplete")):
+                with self.assertRaises(self.module.Blocked) as caught:
+                    call()
+                self.assertEqual(str(caught.exception), reason)
+
     def test_commons_revision_requires_git_content_not_http_claim(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

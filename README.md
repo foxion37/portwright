@@ -20,16 +20,16 @@ Three kinds of notes do the work:
 | **Lesson** | `failures/<date>-<tool>-<symptom>.md` | What was tried, the confirmed root cause, and the corrected move |
 | **Profile** | `profiles/<project>.md` | Which GitHub account, secret source, and database this directory belongs to |
 
-One call answers four questions at once:
+On a fresh public clone, one call answers these questions (excerpt; `PW` is the clone directory):
 
 ```text
-$ portwright preflight google-apps-script
-READY: google-apps-script
-Profile: portwright (github <account>, env 1password/DEVELOPER, db -)
-Procedure: services/google-apps-script.md
-Freshness: fresh (version match only; procedure steps not revalidated)
+$ "$PW/bin/portwright" preflight github
+READY: github
+Profile: (none) no profiles defined
+Procedure: services/github.md
+Freshness: unknown -> verify-required (no evidence supplied (rule 3))
 Tier: confirm
-Active Lessons: 0
+Active Lessons: 3
 ```
 
 Which account am I on, what is the procedure, can I trust this note, and should I ask the user first.
@@ -72,7 +72,7 @@ Portwright v1 is deliberately small.
 
 The repo stores procedures and lessons. Your agent reads them before acting.
 
-The local CLI can be cloned and used from any directory by outside developers, company colleagues, and non-developers with an Agent. The shared public Hub (M2) and separate company Hub (M3) are planned, not available in v2.1.0. See [Roles and scope](docs/roles-and-scope.md) for what each audience can do.
+The local CLI can be cloned and used from any directory by outside developers, company colleagues, and non-developers with an Agent. It needs no account, network, or credential. The shared public Hub (M2) is deployed but invite-only: you need an invite token from its Operator, and its latest live SECRETS/INJECTION acceptance runs are still unresolved, so treat it as optional and unproven. The separate company Hub (M3) is not approved and not available. See [Roles and scope](docs/roles-and-scope.md) for what each audience can do.
 
 ## Who It Is For
 
@@ -140,7 +140,7 @@ Start with [install/README.md](install/README.md).
 
 Short version:
 
-1. Clone this repo somewhere stable on your machine. `<portwright>` below means that clone directory; without `--home` or `PORTWRIGHT_HOME`, it also stores your notes.
+1. Clone this repo somewhere stable on your machine (see the install guide): `PW="$HOME/tools/portwright"`. `$PW` below means that clone directory; without `--home` or `PORTWRIGHT_HOME`, it also stores your notes.
 2. Pick the Client adapter:
    - [Claude Code](install/adapters/claude-code.md)
    - [Codex](install/adapters/codex.md)
@@ -153,14 +153,14 @@ Short version:
 3. Run the matching install command, for example:
 
 ```sh
-<portwright>/bin/portwright client install codex
+"$PW/bin/portwright" client install codex
 ```
 
 4. Restart the Client, then verify both memory and installation:
 
 ```sh
-<portwright>/bin/portwright check
-<portwright>/bin/portwright client doctor codex
+"$PW/bin/portwright" check
+"$PW/bin/portwright" client doctor codex
 ```
 
 ## Use
@@ -171,26 +171,199 @@ Ask your agent to use an external tool as usual. Portwright changes what the age
 2. Read the returned Procedure and active Lessons.
 3. Act through the already-connected backend when possible.
 4. Ask the user only for a genuinely human-only step, such as approving OAuth.
-5. If something new breaks and the root cause is confirmed, create a Lesson
-   draft and promote it only after validation.
+5. If something new breaks and the root cause is confirmed, create a Lesson draft and promote it only after validation.
+
+The local walk-through below (content home through skills) needs no network and no credentials; the optional features that do are listed in the last table. It uses made-up names (`acme-demo`, `demo-app`, `example-org`) so you can practice the whole loop; the example contents are fictional practice data, not instructions for any real tool. For a real tool, fill notes from that tool's current official documentation.
+
+### Pick a content home
+
+Your notes live in a **content home**: any directory you own. Without `--home` or `PORTWRIGHT_HOME`, the home is the clone itself. A separate home keeps your notes out of the code checkout, and an empty directory is enough; the schemas and bundled skills still come from the clone. `--home` overrides `PORTWRIGHT_HOME`, and a different home does not see this home's private notes.
+
+`PW` is the clone directory from the [install guide](install/README.md) (any path; spaces are fine if quoted everywhere):
 
 ```sh
-bin/portwright memory draft lesson <service-id> <slug>
-bin/portwright memory promote <draft-path>
+PW="$HOME/tools/portwright"
+export PORTWRIGHT_HOME="$HOME/portwright-notes"   # or pass --home "$HOME/portwright-notes" to every command
+mkdir -p "$PORTWRIGHT_HOME"
+"$PW/bin/portwright" check                         # "0 passed, 0 failed" on an empty home is normal
 ```
 
-2.0.0 commands:
-
-```sh
-bin/portwright preflight <service-id> [--intent call|instruct|recover] [--profile <id>] [--json]
-bin/portwright browser select --candidates candidates.json --goal "<text>" [--json]   # file holds the candidate list
-bin/portwright update --dry-run --json   # preview: update runs git pull --ff-only itself, never pull first
-bin/portwright update
-```
+### Preflight: cache miss, then hit
 
 ```sh
-bin/portwright review --days 90   # what the cache says to fix next (counted, not guessed)
+"$PW/bin/portwright" preflight acme-demo
 ```
+
+On an empty home the first lines are `DERIVE REQUIRED: acme-demo`, `Procedure: (cache miss)`, `Freshness: unknown -> derive-required`, and `Tier: confirm`. This is the expected first answer, not an error (exit code 0): nothing is pre-written, so for a real tool the agent derives the current procedure from official documentation and caches it. Create a draft:
+
+```sh
+"$PW/bin/portwright" memory draft procedure acme-demo   # creates services/_drafts/acme-demo.md with <TODO ...> markers
+```
+
+A real draft has every `<TODO ...>` replaced from the official docs (the template uses Korean headings; keep them). To practice without a real tool, overwrite the draft with this fictional Procedure:
+
+```sh
+cat > "$PORTWRIGHT_HOME/services/_drafts/acme-demo.md" <<'EOF'
+---
+id: acme-demo
+display_name: "Acme Demo (fictional)"
+version_tag: "1.2"
+last_verified: "2026-10-01"
+endpoint:
+  type: cli
+  server: "acme-demo CLI (fictional)"
+human_steps:
+  - "없음"
+agent_can:
+  - "Run the fictional command: acme-demo status"
+status: active
+distributable: false
+---
+
+## 한 줄 요약
+Practice note for a made-up tool. Not a real procedure.
+
+## 정답 절차
+1. Run `acme-demo status`.
+
+## 하지 말 것
+- Do not ask the user for a token.
+
+## 관련 실패 기록
+- 없음
+EOF
+```
+
+Then validate and promote:
+
+```sh
+"$PW/bin/portwright" memory review services/_drafts/acme-demo.md    # READY TO PROMOTE or PROMOTION BLOCKED; never moves the file
+"$PW/bin/portwright" memory promote services/_drafts/acme-demo.md   # PROMOTED: services/_private/acme-demo.md
+"$PW/bin/portwright" preflight acme-demo                            # now READY, Procedure: services/_private/acme-demo.md
+```
+
+What the promotion guard checks (all must pass, otherwise nothing is moved):
+
+- the draft sits directly in `services/_drafts/` or `failures/_drafts/` inside the home, and is not a symlink;
+- the note satisfies its contract (`check` shows the field errors) and contains no leftover `<TODO`, `<replace`, `TODO:` or `[REDACT THIS` marker;
+- no suspected secret matches `install/secret-patterns.json` (pattern-based; it does not find every possible secret, so never write credential values into a note);
+- a Lesson's `## 진짜 원인` (root cause) is not still `unconfirmed`;
+- an existing destination is never overwritten unless you pass `--replace`, which first saves a timestamped `.bak-` copy.
+
+Drafts default to `distributable: false`, so they are promoted to `services/_private/` or `failures/_private/` (personal, gitignored, never exported). Only a note you deliberately mark `distributable: true` is promoted to the tracked `services/` or `failures/`. Promotion moves the draft, so promoting the same path again reports `draft file does not exist`. Running `memory draft` again for the same name prints `DRAFT EXISTS` and keeps your edits.
+
+### Lessons
+
+```sh
+TODAY="$(date +%F)"
+"$PW/bin/portwright" memory draft lesson acme-demo timeout   # failures/_drafts/$TODAY-acme-demo-timeout.md
+cat > "$PORTWRIGHT_HOME/failures/_drafts/$TODAY-acme-demo-timeout.md" <<EOF
+---
+date: "$TODAY"
+service: acme-demo
+service_version: "1.2"
+status: active
+distributable: false
+---
+
+## 증상
+The fictional status call hangs for 30 seconds.
+
+## 진짜 원인
+A made-up proxy setting pointed at a closed port.
+
+## 해결
+Unset the proxy variable for this call.
+
+## 다음에 할 일
+Check the proxy variable first when the call hangs.
+EOF
+"$PW/bin/portwright" memory promote "failures/_drafts/$TODAY-acme-demo-timeout.md"
+```
+
+The promote step is blocked until the root-cause section states a confirmed cause instead of `unconfirmed` (the generated draft says `unconfirmed`; the file above replaces it). A promoted Lesson is linked from the matching Procedure's related-failures section and appears under `Active Lessons` in the next preflight.
+
+### Freshness evidence
+
+`fresh` needs evidence. Read the current version or fetch date from the official docs, then pass it:
+
+```sh
+"$PW/bin/portwright" preflight acme-demo --evidence-version 1.2            # equals the note's version_tag -> fresh (versions agree only)
+"$PW/bin/portwright" preflight acme-demo --evidence-version 1.3            # differs -> stale, derive-required
+"$PW/bin/portwright" preflight acme-demo --evidence-fetched-at 2026-09-30  # on/before last_verified -> fresh; later -> unknown, verify-required
+```
+
+With no evidence the answer is `unknown` and `verify-required`. `--evidence-file <text-file>` adds an optional contradiction check that only runs when JEV (below) is available and is supporting evidence, never the verdict. A Procedure that declares `freshness_evidence.url` and `distributable: true` lets `update` download and cache the official page for later preflights.
+
+### Optional Profiles
+
+A Profile binds a project directory to the right GitHub account, secret source, and database. It stores references only, never values. Create `<content-home>/profiles/demo-app.md` with the complete example below (`project_path` must be an absolute path to a directory; `injector: none` is fine):
+
+```sh
+mkdir -p "$HOME/demo-project" "$PORTWRIGHT_HOME/profiles"
+cat > "$PORTWRIGHT_HOME/profiles/demo-app.md" <<EOF
+---
+id: demo-app
+display_name: Demo App
+project_path: $HOME/demo-project
+github_account: example-org
+env_source:
+  kind: none
+  injector: none
+databases:
+  - sqlite:demo
+services:
+  - acme-demo
+default_tier: confirm
+host: any
+status: active
+---
+
+## 한 줄 요약
+Demo project profile (fictional).
+EOF
+"$PW/bin/portwright" check
+cd "$HOME/demo-project" && "$PW/bin/portwright" preflight acme-demo
+```
+
+The output line becomes `Profile: demo-app (github example-org, env none, db sqlite:demo)`. The longest matching `project_path` wins; `--profile <id>` or `--cwd <dir>` overrides routing. When several profiles remain ambiguous and no JEV is available, the Profile stays `(none)` rather than guessed. A Profile's `default_tier` can only raise the advisory tier; `auto` does not lower the `confirm` returned when no rule or JEV judgment applies.
+
+### Notes MCP and skills MCP are different servers
+
+| Server | Command | Tools | Writes |
+|---|---|---|---|
+| **Notes MCP** (`portwright`) | `"$PW/bin/portwright" mcp --home "$PORTWRIGHT_HOME"` | `preflight`, `get_note`, `status` | no note edits; like the CLI, `preflight` appends a local usage record under `_local/` (gitignored; `review` reads it; deleting it breaks nothing) |
+| **Skills MCP** (`portwright-skills`) | `"$PW/bin/portwright" skills serve --home "$PORTWRIGHT_HOME"` | `search_skills`, `load_skill`, `read_skill_file`, `create_skill`, `update_skill` | `create_skill` and `update_skill` write to your local skill folders |
+
+Both are local stdio servers with no network listener. Use the generic command/arguments in the [install guide](install/README.md) and your Client's own MCP documentation to register them; `client install` does not register MCP servers. To see the Notes MCP work without a Client:
+
+```sh
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"status","arguments":{}}}' | "$PW/bin/portwright" mcp --home "$PORTWRIGHT_HOME"
+```
+
+This proves only that the server answers on stdio; it does not prove any particular Client's UI shows it.
+
+Skills consumer basics: `"$PW/bin/portwright" skills list` and `"$PW/bin/portwright" skills get portwright-tool-use` print the two bundled skills. To expose your own skill folders through the Skills MCP, create `<content-home>/_local/skills.json` listing absolute folder paths, each containing `<skill-name>/SKILL.md` with `name` (equal to the folder name) and `description` front matter:
+
+```json
+{"local":{"mine":"/work/my-skills"}}
+```
+
+Without a configured personal Hub the Skills MCP reports `remote_unavailable` and serves local folders only. `skills status` and `skills stage` need the private work repository and are not for outside users (a public clone says so and exits with code 2).
+
+### What needs network, a key, or an invite
+
+| Feature | Needs | Without it |
+|---|---|---|
+| `check`, `preflight`, `memory`, `review`, both MCP servers | Python 3 and the clone | nothing is missing |
+| JEV judgments (ambiguous Profile, risk tier, contradiction check) | optional paid `TYPESAFE_API_KEY` environment variable and network | deterministic fallback: Tier `confirm`, Freshness `unknown`, Profile unresolved when ambiguous; `status` shows `jev_mode: none` |
+| `update` (new shared notes, evidence download) | the clone is a git checkout with an `origin` remote (`main` branch), and network. With a separate content home, point `--home` at the clone: `"$PW/bin/portwright" update --dry-run --home "$PW"`, then without `--dry-run`. A notes-only home has no `VERSION` or git history, so `update` exits with code 2 there | keep the notes you have |
+| Shared public Hub (`hub sync`, submission tools) | an invite token from its Operator, delivered to the process through the environment variable named in `_local/hub/config.json` | local notes only; without a config `hub sync` exits with code 2 and "Hub not configured" |
+| Company Hub | not approved or available | — |
+
+Never paste credential values into commands, Client settings, notes, or URLs. See [Roles and scope](docs/roles-and-scope.md) for Hub configuration and limits.
+
+Other commands: `"$PW/bin/portwright" browser select --candidates candidates.json --goal "<text>"` (candidate list file; uses JEV when available) and `"$PW/bin/portwright" review --days 90 --no-write` (what the cache says to fix next, counted not guessed).
 
 Example prompts:
 

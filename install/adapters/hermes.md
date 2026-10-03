@@ -2,12 +2,12 @@
 
 Hermes reads `~/.hermes/SOUL.md` as its always-read instruction file.
 
-`<portwright>` is the directory where you cloned this repository; the installed managed block uses that path.
+`$PW` is the absolute path of your clone, as set in the [install guide](../README.md) (`PW=...`); always quote it, e.g. `"$PW/bin/portwright"`. The installed text records that path, so re-run install after moving the clone. This adapter installs guidance only; it does not register an MCP server or launch the Client.
 
 ## Install
 
 ```sh
-<portwright>/bin/portwright client install hermes
+"$PW/bin/portwright" client install hermes
 ```
 
 The Client adapter installs or updates the canonical managed block exactly once:
@@ -20,13 +20,13 @@ The Client adapter installs or updates the canonical managed block exactly once:
 ## Verify
 
 ```sh
-<portwright>/bin/portwright client doctor hermes
+"$PW/bin/portwright" client doctor hermes
 ```
 
 ## Remove
 
 ```sh
-<portwright>/bin/portwright client remove hermes
+"$PW/bin/portwright" client remove hermes
 ```
 
 Text outside the managed block is preserved.
